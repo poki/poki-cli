@@ -1,0 +1,48 @@
+{
+  "name": "@poki/cli",
+  "version": "0.1.2",
+  "description": "Poki for Developers command line utility",
+  "keywords": [
+    "cli",
+    "poki"
+  ],
+  "homepage": "https://github.com/poki/poki-cli",
+  "bugs": {
+    "url": "https://github.com/poki/poki-cli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/poki/poki-cli.git"
+  },
+  "license": "MIT",
+  "files": [
+    "bin/index.js"
+  ],
+  "bin": {
+    "poki": "bin/index.js"
+  },
+  "scripts": {
+    "cli": "node bin/index.js",
+    "lint": "standard src rollup.config.js --fix",
+    "build": "rollup -c",
+    "prepublish": "yarn lint && yarn build"
+  },
+  "dependencies": {
+    "archiver": "^5.3.0",
+    "form-data": "^4.0.0",
+    "open": "^8.2.1",
+    "yargs": "^17.1.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.15.0",
+    "@rollup/plugin-babel": "^5.3.0",
+    "@rollup/plugin-commonjs": "^20.0.0",
+    "@rollup/plugin-json": "^4.1.0",
+    "@rollup/plugin-node-resolve": "^13.0.4",
+    "rollup": "^2.56.2",
+    "standard": "^16.0.3"
+  },
+  "engines": {
+    "node": ">=12"
+  }
+}

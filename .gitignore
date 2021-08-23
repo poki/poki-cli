@@ -1,0 +1,4 @@
+bin/
+dist/
+node_modules/
+poki.json
