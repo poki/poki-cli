@@ -14,7 +14,7 @@
     "type": "git",
     "url": "git+https://github.com/poki/poki-cli.git"
   },
-  "license": "MIT",
+  "license": "ISC",
   "files": [
     "bin/index.js"
   ],
