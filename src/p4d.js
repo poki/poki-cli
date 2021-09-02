@@ -1,15 +1,24 @@
 import { auth, refresh } from './auth'
 
-import { createReadStream } from 'fs'
+import { createReadStream, statSync } from 'fs'
 import { request } from 'https'
+import { basename } from 'path'
 
 const FormData = require('form-data')
 
 async function doit (gameId, filename, name, notes, config) {
   return new Promise((resolve, reject) => {
+    const stat = statSync(filename)
+
     const form = new FormData()
 
-    form.append('file', createReadStream(filename))
+    form.append('file', createReadStream(filename, {
+      highWaterMark: 1024 * 1024 // 1mb
+    }), {
+      filepath: basename(filename),
+      knownLength: stat.size,
+      contentType: 'application/zip'
+    })
     if (name !== filename) {
       form.append('label', name)
     }
