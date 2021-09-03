@@ -6,7 +6,7 @@ import { createZip } from './zipfile'
 import { postToP4D } from './p4d'
 import { Config } from './config'
 
-async function upload (gameId: string, buildDir: string, filename: string, name: string, notes?: string) {
+async function upload (gameId: string, buildDir: string, filename: string, name: string, notes?: string): Promise<void> {
   await createZip(filename, buildDir)
 
   try {
@@ -28,7 +28,7 @@ Your build is still processing, once that is done the following links will be av
   process.exit(0)
 }
 
-function init (gameId: string, buildDir: string) {
+function init (gameId: string, buildDir: string): void {
   writeFileSync('poki.json', JSON.stringify({
     game_id: gameId,
     build_dir: buildDir
@@ -78,7 +78,7 @@ const argv = yargs(process.argv.slice(2))
       .option('build-dir', {
         alias: 'b',
         describe: 'Directory to upload',
-        default: config.build_dir || 'dist',
+        default: config.build_dir ?? 'dist',
         type: 'string'
       })
       .option('name', {
@@ -95,7 +95,7 @@ const argv = yargs(process.argv.slice(2))
   })
   .demandCommand(1)
   .example([
-    [`$0 init --game ${config.game_id || 'f85c728f-1055-4777-92fa-841eb40ee723'} --build-dir ${config.build_dir || 'dist'}`],
+    [`$0 init --game ${config.game_id ?? 'f85c728f-1055-4777-92fa-841eb40ee723'} --build-dir ${config.build_dir ?? 'dist'}`],
     ['$0 upload --name "New Version Name"'],
     ['$0 upload --name "$(git rev-parse --short HEAD)" --notes "$(git log -1 --pretty=%B)"']
   ])

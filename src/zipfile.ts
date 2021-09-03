@@ -2,8 +2,8 @@ import { createWriteStream } from 'fs'
 
 import archiver, { ArchiverError } from 'archiver'
 
-export function createZip (filename: string, dir: string) {
-  return new Promise<void>((resolve, reject) => {
+export async function createZip (filename: string, dir: string): Promise<void> {
+  return await new Promise<void>((resolve, reject) => {
     const archive = archiver('zip', { zlib: { level: 6 } })
     const stream = createWriteStream(filename)
 

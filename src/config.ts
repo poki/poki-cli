@@ -1,7 +1,7 @@
 import { homedir } from 'os'
 import { join } from 'path'
 
-export function getConfigDir () {
+export function getConfigDir (): string {
   const defaultConfigDir = join(homedir(), '.config', 'poki')
 
   if (process.platform === 'win32') {
@@ -13,9 +13,9 @@ export function getConfigDir () {
   }
 }
 
-export type Config = {
-	game_id?: string;
-	build_dir?: string;
-	access_token?: string;
-	refresh_token?: string;
+export interface Config {
+  game_id?: string
+  build_dir?: string
+  access_token?: string
+  refresh_token?: string
 }

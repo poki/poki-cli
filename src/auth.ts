@@ -7,8 +7,8 @@ import open from 'open'
 
 import { getConfigDir, Config } from './config'
 
-function exchange (exchangeToken: string) {
-  return new Promise((resolve, reject) => {
+async function exchange (exchangeToken: string): Promise<Config> {
+  return await new Promise((resolve, reject) => {
     const req = request({
       hostname: 'auth-production.poki.io',
       port: 443,
@@ -38,10 +38,10 @@ function exchange (exchangeToken: string) {
   })
 }
 
-export function refresh (config: Config) {
+export async function refresh (config: Config): Promise<Config> {
   console.log('refreshing authentication...')
 
-  return new Promise<Config>((resolve, reject) => {
+  return await new Promise<Config>((resolve, reject) => {
     const req = request({
       hostname: 'auth-production.poki.io',
       port: 443,
@@ -83,8 +83,8 @@ export function refresh (config: Config) {
   })
 }
 
-export function auth () {
-  return new Promise<Config>((resolve, reject) => {
+export async function auth (): Promise<Config> {
+  return await new Promise<Config>((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')
     let config
@@ -135,7 +135,7 @@ export function auth () {
 
         server.close()
 
-        resolve(config as Config)
+        resolve(config)
       } else {
         res.setHeader('Content-Type', 'text/plain')
         res.writeHead(200)
@@ -150,8 +150,8 @@ export function auth () {
       reject(err)
     })
     server.listen(0, () => {
-		const address = server.address();
-		if (address === null || typeof address === 'string') return;
+      const address = server.address()
+      if (address === null || typeof address === 'string') return
       open(`https://developers.poki.com/signin/?cli=${encodeURIComponent(`http://localhost:${address.port}`)}`)
     })
   })

@@ -5,15 +5,15 @@ import { createReadStream, statSync } from 'fs'
 import { request } from 'https'
 import { basename } from 'path'
 
-const FormData = require('form-data')
+import FormData from 'form-data'
 
-type Response = {
-	statusCode?: number;
-	data: string;
-};
+interface Response {
+  statusCode?: number
+  data: string
+}
 
-async function doit (gameId: string, filename: string, name: string, notes: string | undefined, config: Config) {
-  return new Promise<Response>((resolve, reject) => {
+async function doit (gameId: string, filename: string, name: string, notes: string | undefined, config: Config): Promise<Response> {
+  return await new Promise<Response>((resolve, reject) => {
     const stat = statSync(filename)
 
     const form = new FormData()

@@ -23,7 +23,7 @@
   },
   "scripts": {
     "cli": "node bin/index.js",
-    "lint": "standard src rollup.config.js --fix",
+    "lint": "ts-standard src rollup.config.js --fix",
     "build": "rollup -c",
     "prepublish": "yarn lint && yarn build"
   },
@@ -43,7 +43,7 @@
     "@types/yargs": "^17.0.2",
     "rollup": "^2.56.2",
     "rollup-plugin-typescript2": "^0.30.0",
-    "standard": "^16.0.3",
+    "ts-standard": "^10.0.0",
     "tslib": "^2.3.1",
     "typescript": "^4.4.2"
   },
