@@ -1,4 +1,5 @@
 import { auth, refresh } from './auth'
+import { Config } from './config'
 
 import { createReadStream, statSync } from 'fs'
 import { request } from 'https'
@@ -6,8 +7,13 @@ import { basename } from 'path'
 
 const FormData = require('form-data')
 
-async function doit (gameId, filename, name, notes, config) {
-  return new Promise((resolve, reject) => {
+type Response = {
+	statusCode?: number;
+	data: string;
+};
+
+async function doit (gameId: string, filename: string, name: string, notes: string | undefined, config: Config) {
+  return new Promise<Response>((resolve, reject) => {
     const stat = statSync(filename)
 
     const form = new FormData()
@@ -58,7 +64,7 @@ async function doit (gameId, filename, name, notes, config) {
   })
 }
 
-export async function postToP4D (gameId, filename, name, notes) {
+export async function postToP4D (gameId: string, filename: string, name: string, notes?: string) {
   let config = await auth()
   let response = await doit(gameId, filename, name, notes, config)
 
@@ -68,7 +74,7 @@ export async function postToP4D (gameId, filename, name, notes) {
   }
 
   if (response.statusCode !== 201) {
-    throw Error(response)
+    throw Error(JSON.stringify(response))
   } else {
     return JSON.parse(response.data)
   }

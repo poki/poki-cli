@@ -12,3 +12,10 @@ export function getConfigDir () {
     return defaultConfigDir
   }
 }
+
+export type Config = {
+	game_id?: string;
+	build_dir?: string;
+	access_token?: string;
+	refresh_token?: string;
+}

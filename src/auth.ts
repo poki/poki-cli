@@ -5,9 +5,9 @@ import { join } from 'path'
 
 import open from 'open'
 
-import { getConfigDir } from './config'
+import { getConfigDir, Config } from './config'
 
-function exchange (exchangeToken) {
+function exchange (exchangeToken: string) {
   return new Promise((resolve, reject) => {
     const req = request({
       hostname: 'auth-production.poki.io',
@@ -38,10 +38,10 @@ function exchange (exchangeToken) {
   })
 }
 
-export function refresh (config) {
+export function refresh (config: Config) {
   console.log('refreshing authentication...')
 
-  return new Promise((resolve, reject) => {
+  return new Promise<Config>((resolve, reject) => {
     const req = request({
       hostname: 'auth-production.poki.io',
       port: 443,
@@ -84,7 +84,7 @@ export function refresh (config) {
 }
 
 export function auth () {
-  return new Promise((resolve, reject) => {
+  return new Promise<Config>((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')
     let config
@@ -96,7 +96,7 @@ export function auth () {
     }
 
     if (config) {
-      resolve(config)
+      resolve(config as Config)
       return
     }
 
@@ -112,7 +112,7 @@ export function auth () {
     }
 
     const server = createServer(async (req, res) => {
-      const q = new URL(req.url, 'http://localhost')
+      const q = new URL(req.url as string, 'http://localhost')
 
       if (q.pathname === '/favicon.ico') {
         res.writeHead(404)
@@ -135,7 +135,7 @@ export function auth () {
 
         server.close()
 
-        resolve(config)
+        resolve(config as Config)
       } else {
         res.setHeader('Content-Type', 'text/plain')
         res.writeHead(200)
@@ -150,7 +150,9 @@ export function auth () {
       reject(err)
     })
     server.listen(0, () => {
-      open(`https://developers.poki.com/signin/?cli=${encodeURIComponent(`http://localhost:${server.address().port}`)}`)
+		const address = server.address();
+		if (address === null || typeof address === 'string') return;
+      open(`https://developers.poki.com/signin/?cli=${encodeURIComponent(`http://localhost:${address.port}`)}`)
     })
   })
 }

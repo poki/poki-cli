@@ -4,8 +4,9 @@ import yargs from 'yargs'
 
 import { createZip } from './zipfile'
 import { postToP4D } from './p4d'
+import { Config } from './config'
 
-async function upload (gameId, buildDir, filename, name, notes) {
+async function upload (gameId: string, buildDir: string, filename: string, name: string, notes?: string) {
   await createZip(filename, buildDir)
 
   try {
@@ -27,14 +28,14 @@ Your build is still processing, once that is done the following links will be av
   process.exit(0)
 }
 
-function init (gameId, buildDir) {
+function init (gameId: string, buildDir: string) {
   writeFileSync('poki.json', JSON.stringify({
     game_id: gameId,
     build_dir: buildDir
   }, null, 2) + '\n', 'ascii')
 }
 
-let config = {}
+let config: Config = {}
 try {
   config = JSON.parse(readFileSync('poki.json', 'ascii'))
 } catch (ignore) {
@@ -101,11 +102,11 @@ const argv = yargs(process.argv.slice(2))
   .help('h')
   .alias('h', 'help')
   .wrap(94) // Make sure our examples fit.
-  .argv
+  .parseSync()
 
 if (argv._.includes('init')) {
-  init(argv.game, argv.buildDir)
+  init(argv.game!, argv.buildDir as string)
 }
 if (argv._.includes('upload')) {
-  upload(argv.game, argv.buildDir, filename, argv.name, argv.notes)
+  upload(argv.game!, argv.buildDir as string, filename, argv.name, argv.notes)
 }
