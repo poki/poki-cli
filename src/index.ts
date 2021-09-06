@@ -42,7 +42,7 @@ try {
   try {
     const packagejson = JSON.parse(readFileSync('package.json', 'ascii'))
 
-    if (packagejson.poki) {
+    if (typeof packagejson.poki === 'object') {
       config = packagejson.poki
     }
   } catch (ignore) {}
@@ -71,7 +71,7 @@ const argv = yargs(process.argv.slice(2))
       .option('game', {
         alias: 'g',
         describe: 'Poki for Developers game ID',
-        demandOption: !config.game_id,
+        demandOption: config.game_id !== undefined,
         default: config.game_id,
         type: 'string'
       })

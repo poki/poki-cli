@@ -17,7 +17,7 @@ async function exchange (exchangeToken: string): Promise<Config> {
       headers: { 'Content-Type': 'application/json' }
     }, res => {
       let data = ''
-      res.on('data', chunk => {
+      res.on('data', (chunk: string) => {
         data += chunk
       })
       res.on('end', () => {
@@ -52,7 +52,7 @@ export async function refresh (config: Config): Promise<Config> {
       }
     }, res => {
       let data = ''
-      res.on('data', chunk => {
+      res.on('data', (chunk: string) => {
         data += chunk
       })
       res.on('end', () => {
@@ -87,17 +87,13 @@ export async function auth (): Promise<Config> {
   return await new Promise<Config>((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')
-    let config
 
     try {
-      config = JSON.parse(readFileSync(configPath, 'ascii'))
-    } catch (e) {
-      // Ignore.
-    }
-
-    if (config) {
+      const config = JSON.parse(readFileSync(configPath, 'ascii'))
       resolve(config as Config)
       return
+    } catch (e) {
+      // Ignore.
     }
 
     console.log('authentication required, opening browser...')
@@ -121,7 +117,7 @@ export async function auth (): Promise<Config> {
       }
 
       const exchangeToken = q.searchParams.get('exchange_token')
-      if (exchangeToken) {
+      if (exchangeToken !== null) {
         res.setHeader('Content-Type', 'text/html')
         res.writeHead(200)
         res.end('You can close this window and return to your terminal')

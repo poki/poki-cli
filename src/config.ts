@@ -5,8 +5,8 @@ export function getConfigDir (): string {
   const defaultConfigDir = join(homedir(), '.config', 'poki')
 
   if (process.platform === 'win32') {
-    return process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Poki') : defaultConfigDir
-  } else if (process.env.XDG_CONFIG_HOME) {
+    return process.env.LOCALAPPDATA !== undefined ? join(process.env.LOCALAPPDATA, 'Poki') : defaultConfigDir
+  } else if (process.env.XDG_CONFIG_HOME !== undefined) {
     return join(process.env.XDG_CONFIG_HOME, 'poki')
   } else {
     return defaultConfigDir

@@ -14,6 +14,10 @@ interface Response {
 
 async function doit (gameId: string, filename: string, name: string, notes: string | undefined, config: Config): Promise<Response> {
   return await new Promise<Response>((resolve, reject) => {
+    if (config.access_token === undefined) {
+      return reject(new Error('No access token found'))
+    }
+
     const stat = statSync(filename)
 
     const form = new FormData()
@@ -28,7 +32,7 @@ async function doit (gameId: string, filename: string, name: string, notes: stri
     if (name !== filename) {
       form.append('label', name)
     }
-    if (notes) {
+    if (notes !== undefined) {
       form.append('notes', notes)
     }
 
@@ -45,7 +49,7 @@ async function doit (gameId: string, filename: string, name: string, notes: stri
       }
     }, res => {
       let data = ''
-      res.on('data', chunk => {
+      res.on('data', (chunk: string) => {
         data += chunk
       })
       res.on('end', () => {
@@ -64,7 +68,13 @@ async function doit (gameId: string, filename: string, name: string, notes: stri
   })
 }
 
-export async function postToP4D (gameId: string, filename: string, name: string, notes?: string) {
+interface P4dData {
+  url: string
+  game_id: string
+  id: number
+}
+
+export async function postToP4D (gameId: string, filename: string, name: string, notes?: string): Promise<P4dData> {
   let config = await auth()
   let response = await doit(gameId, filename, name, notes, config)
 
