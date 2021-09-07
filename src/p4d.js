@@ -34,7 +34,7 @@ async function doit (gameId, filename, name, notes, config) {
       path: `/games/${gameId}/versions`,
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${config.access_token}`,
+        Authorization: `${config.access_type || 'Bearer'} ${config.access_token}`,
         ...form.getHeaders()
       }
     }, res => {
