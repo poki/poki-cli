@@ -18,4 +18,5 @@ export interface Config {
   build_dir?: string
   access_token?: string
   refresh_token?: string
+  access_type?: string
 }
