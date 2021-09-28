@@ -47,7 +47,7 @@ try {
   } catch (ignore) {}
 }
 
-const filename = `${new Date().toISOString().split('.')[0].replace('T', '-')}.zip`
+const filename = `${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().split('.')[0].replace('T', '-').replace(/:/g, '')}.zip`
 
 const argv = yargs(process.argv.slice(2))
   .command('init', 'Create a poki.json configuration file', function (yargs) {
