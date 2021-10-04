@@ -62,7 +62,7 @@ export async function postToP4D (gameId, filename, name, notes) {
   let config = await auth()
   let response = await doit(gameId, filename, name, notes, config)
 
-  if (response.statusCode === 401) {
+  if (response.statusCode === 401 && config.access_type === 'Bearer') {
     config = await refresh(config)
     response = await doit(gameId, filename, name, notes, config)
   }
