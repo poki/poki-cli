@@ -107,6 +107,8 @@ const argv = yargs(process.argv.slice(2))
   .help('h')
   .alias('h', 'help')
   .wrap(94) // Make sure our examples fit.
+  .strict()
+  .demandCommand()
   .argv
 
 if (argv._.includes('init')) {
