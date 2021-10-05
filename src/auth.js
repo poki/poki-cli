@@ -83,16 +83,18 @@ export function refresh (config) {
   })
 }
 
-export function auth () {
+export function auth (force) {
   return new Promise((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')
     let config
 
-    try {
-      config = JSON.parse(readFileSync(configPath, 'ascii'))
-    } catch (e) {
-      // Ignore.
+    if (!force) {
+      try {
+        config = JSON.parse(readFileSync(configPath, 'ascii'))
+      } catch (e) {
+        // Ignore.
+      }
     }
 
     if (config) {
