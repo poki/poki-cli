@@ -5,11 +5,11 @@ import yargs from 'yargs'
 import { createZip } from './zipfile'
 import { postToP4D } from './p4d'
 
-async function upload (gameId, buildDir, filename, name, notes) {
+async function upload (gameId, buildDir, filename, name, notes, makePublic) {
   await createZip(filename, buildDir)
 
   try {
-    const data = await postToP4D(gameId, filename, name, notes)
+    const data = await postToP4D(gameId, filename, name, notes, makePublic)
 
     console.log(`
 Version uploaded successfully
@@ -91,6 +91,12 @@ const argv = yargs(process.argv.slice(2))
         describe: 'Version notes',
         type: 'string'
       })
+      .option('make-public', {
+        alias: 'l',
+        describe: 'Make version public after upload',
+        default: false,
+        type: 'boolean'
+      })
   })
   .demandCommand(1)
   .example([
@@ -105,7 +111,6 @@ const argv = yargs(process.argv.slice(2))
 
 if (argv._.includes('init')) {
   init(argv.game, argv.buildDir)
-}
-if (argv._.includes('upload')) {
-  upload(argv.game, argv.buildDir, filename, argv.name, argv.notes)
+} else if (argv._.includes('upload')) {
+  upload(argv.game, argv.buildDir, filename, argv.name, argv.notes, argv.makePublic)
 }
