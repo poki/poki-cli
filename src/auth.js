@@ -99,8 +99,8 @@ export function auth () {
       config = {
         ...config,
         access_type: 'Token',
-        access_token: process.env.POKI_ACCESS_TOKEN,
-      };
+        access_token: process.env.POKI_ACCESS_TOKEN
+      }
     }
 
     if (config) {
