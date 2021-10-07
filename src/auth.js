@@ -83,7 +83,7 @@ export function refresh (config) {
   })
 }
 
-export function auth (force) {
+export function auth (force = false) {
   return new Promise((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')

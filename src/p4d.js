@@ -64,7 +64,7 @@ async function doit (gameId, filename, name, notes, makePublic, config) {
 }
 
 export async function postToP4D (gameId, filename, name, notes, makePublic) {
-  let config = await auth(false)
+  let config = await auth()
   let response = await doit(gameId, filename, name, notes, makePublic, config)
 
   if (response.statusCode === 401) {
