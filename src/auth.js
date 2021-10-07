@@ -95,6 +95,14 @@ export function auth () {
       // Ignore.
     }
 
+    if (typeof process.env.POKI_ACCESS_TOKEN === 'string') {
+      config = {
+        ...config,
+        access_type: 'Token',
+        access_token: process.env.POKI_ACCESS_TOKEN,
+      };
+    }
+
     if (config) {
       resolve(config)
       return
