@@ -1,20 +1,18 @@
 import { auth, refresh } from './auth'
 
-import { createReadStream, statSync } from 'fs'
+import { readFileSync, statSync } from 'fs'
 import { request } from 'https'
 import { basename } from 'path'
 
 const FormData = require('form-data')
 
-async function doit (gameId, filename, name, notes, config) {
+async function doit (gameId, filename, name, notes, makePublic, config) {
   return new Promise((resolve, reject) => {
     const stat = statSync(filename)
 
     const form = new FormData()
 
-    form.append('file', createReadStream(filename, {
-      highWaterMark: 1024 * 1024 // 1mb
-    }), {
+    form.append('file', readFileSync(filename), {
       filepath: basename(filename),
       knownLength: stat.size,
       contentType: 'application/zip'
@@ -25,9 +23,13 @@ async function doit (gameId, filename, name, notes, config) {
     if (notes) {
       form.append('notes', notes)
     }
+    if (makePublic) {
+      form.append('make-public', 'true')
+    }
 
     console.log('uploading...')
 
+    const buffer = form.getBuffer()
     const req = request({
       hostname: 'devs-api.poki.io',
       port: 443,
@@ -35,18 +37,20 @@ async function doit (gameId, filename, name, notes, config) {
       method: 'POST',
       headers: {
         Authorization: `${config.access_type || 'Bearer'} ${config.access_token}`,
+        'Content-Length': buffer.length,
+        'User-Agent': 'poki-cli',
         ...form.getHeaders()
       }
     }, res => {
-      let data = ''
-      res.on('data', chunk => {
-        data += chunk
-      })
+      const data = []
       res.on('end', () => {
         resolve({
           statusCode: res.statusCode,
-          data
+          data: Buffer.concat(data).toString()
         })
+      })
+      res.on('data', chunk => {
+        data.push(chunk)
       })
     })
 
@@ -54,17 +58,18 @@ async function doit (gameId, filename, name, notes, config) {
       reject(error)
     })
 
-    form.pipe(req)
+    req.write(buffer, 'binary')
+    req.end()
   })
 }
 
-export async function postToP4D (gameId, filename, name, notes) {
+export async function postToP4D (gameId, filename, name, notes, makePublic) {
   let config = await auth()
-  let response = await doit(gameId, filename, name, notes, config)
+  let response = await doit(gameId, filename, name, notes, makePublic, config)
 
   if (response.statusCode === 401) {
     config = await refresh(config)
-    response = await doit(gameId, filename, name, notes, config)
+    response = await doit(gameId, filename, name, notes, makePublic, config)
   }
 
   if (response.statusCode !== 201) {
