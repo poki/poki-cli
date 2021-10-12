@@ -5,10 +5,10 @@ import { join } from 'path'
 
 import open from 'open'
 
-import { getConfigDir } from './config'
+import { getConfigDir, Config } from './config'
 
-function exchange (exchangeToken) {
-  return new Promise((resolve, reject) => {
+async function exchange (exchangeToken: string): Promise<Config> {
+  return await new Promise((resolve, reject) => {
     const req = request({
       hostname: 'auth-production.poki.io',
       port: 443,
@@ -17,7 +17,7 @@ function exchange (exchangeToken) {
       headers: { 'Content-Type': 'application/json' }
     }, res => {
       let data = ''
-      res.on('data', chunk => {
+      res.on('data', (chunk: string) => {
         data += chunk
       })
       res.on('end', () => {
@@ -38,10 +38,10 @@ function exchange (exchangeToken) {
   })
 }
 
-export function refresh (config) {
+export async function refresh (config: Config): Promise<Config> {
   console.log('refreshing authentication...')
 
-  return new Promise((resolve, reject) => {
+  return await new Promise<Config>((resolve, reject) => {
     const req = request({
       hostname: 'auth-production.poki.io',
       port: 443,
@@ -52,7 +52,7 @@ export function refresh (config) {
       }
     }, res => {
       let data = ''
-      res.on('data', chunk => {
+      res.on('data', (chunk: string) => {
         data += chunk
       })
       res.on('end', () => {
@@ -83,14 +83,14 @@ export function refresh (config) {
   })
 }
 
-export function auth () {
-  return new Promise((resolve, reject) => {
+export async function auth (): Promise<Config> {
+  return await new Promise<Config>((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')
-    let config
+    let config: Config|undefined
 
     try {
-      config = JSON.parse(readFileSync(configPath, 'ascii'))
+      config = JSON.parse(readFileSync(configPath, 'ascii')) as Config
     } catch (e) {
       // Ignore.
     }
@@ -103,7 +103,7 @@ export function auth () {
       }
     }
 
-    if (config) {
+    if (config != null) {
       resolve(config)
       return
     }
@@ -119,8 +119,8 @@ export function auth () {
       }
     }
 
-    const server = createServer(async (req, res) => {
-      const q = new URL(req.url, 'http://localhost')
+    const server = createServer((req, res) => {
+      const q = new URL(req.url as string, 'http://localhost')
 
       if (q.pathname === '/favicon.ico') {
         res.writeHead(404)
@@ -129,21 +129,23 @@ export function auth () {
       }
 
       const exchangeToken = q.searchParams.get('exchange_token')
-      if (exchangeToken) {
+      if (exchangeToken !== null) {
         res.setHeader('Content-Type', 'text/html')
         res.writeHead(200)
         res.end('You can close this window and return to your terminal')
 
-        const config = await exchange(exchangeToken)
-
-        writeFileSync(configPath, JSON.stringify(config), 'ascii')
-
-        // Make sure the file isn't readable for everyone.
-        chmodSync(configPath, '600')
-
         server.close()
 
-        resolve(config)
+        exchange(exchangeToken).then((config: Config) => {
+          writeFileSync(configPath, JSON.stringify(config), 'ascii')
+
+          // Make sure the file isn't readable for everyone.
+          chmodSync(configPath, '600')
+
+          resolve(config)
+        }).catch(err => {
+          reject(err)
+        })
       } else {
         res.setHeader('Content-Type', 'text/plain')
         res.writeHead(200)
@@ -158,7 +160,15 @@ export function auth () {
       reject(err)
     })
     server.listen(0, () => {
-      open(`https://developers.poki.com/signin/?cli=${encodeURIComponent(`http://localhost:${server.address().port}`)}`)
+      const address = server.address()
+
+      if (address === null || typeof address === 'string') {
+        return
+      }
+
+      open(`https://developers.poki.com/signin/?cli=${encodeURIComponent(`http://localhost:${address.port}`)}`).catch(err => {
+        reject(err)
+      })
     })
   })
 }
