@@ -4,8 +4,9 @@ import yargs from 'yargs'
 
 import { createZip } from './zipfile'
 import { postToP4D } from './p4d'
+import { Config } from './config'
 
-async function upload (gameId, buildDir, filename, name, notes, makePublic) {
+async function upload (gameId: string, buildDir: string, filename: string, name: string, notes: string|undefined, makePublic: boolean): Promise<void> {
   await createZip(filename, buildDir)
 
   try {
@@ -27,21 +28,21 @@ Your build is still processing, once that is done the following links will be av
   process.exit(0)
 }
 
-function init (gameId, buildDir) {
+function init (gameId: string, buildDir: string): void {
   writeFileSync('poki.json', JSON.stringify({
     game_id: gameId,
     build_dir: buildDir
   }, null, 2) + '\n', 'ascii')
 }
 
-let config = {}
+let config: Config = {}
 try {
   config = JSON.parse(readFileSync('poki.json', 'ascii'))
 } catch (ignore) {
   try {
     const packagejson = JSON.parse(readFileSync('package.json', 'ascii'))
 
-    if (packagejson.poki) {
+    if (typeof packagejson.poki === 'object') {
       config = packagejson.poki
     }
   } catch (ignore) {}
@@ -70,14 +71,14 @@ const argv = yargs(process.argv.slice(2))
       .option('game', {
         alias: 'g',
         describe: 'Poki for Developers game ID',
-        demandOption: !config.game_id,
+        demandOption: config.game_id !== undefined,
         default: config.game_id,
         type: 'string'
       })
       .option('build-dir', {
         alias: 'b',
         describe: 'Directory to upload',
-        default: config.build_dir || 'dist',
+        default: config.build_dir ?? 'dist',
         type: 'string'
       })
       .option('name', {
@@ -100,17 +101,22 @@ const argv = yargs(process.argv.slice(2))
   })
   .demandCommand(1)
   .example([
-    [`$0 init --game ${config.game_id || 'f85c728f-1055-4777-92fa-841eb40ee723'} --build-dir ${config.build_dir || 'dist'}`],
+    [`$0 init --game ${config.game_id ?? 'f85c728f-1055-4777-92fa-841eb40ee723'} --build-dir ${config.build_dir ?? 'dist'}`],
     ['$0 upload --name "New Version Name"'],
     ['$0 upload --name "$(git rev-parse --short HEAD)" --notes "$(git log -1 --pretty=%B)"']
   ])
   .help('h')
   .alias('h', 'help')
   .wrap(94) // Make sure our examples fit.
-  .argv
+  .parseSync()
 
 if (argv._.includes('init')) {
-  init(argv.game, argv.buildDir)
-} else if (argv._.includes('upload')) {
-  upload(argv.game, argv.buildDir, filename, argv.name, argv.notes, argv.makePublic)
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  init(argv.game!, argv.buildDir as string)
+}
+if (argv._.includes('upload')) {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  upload(argv.game!, argv.buildDir as string, filename, argv.name, argv.notes, argv['make-public']).catch(err => {
+    console.error(err)
+  })
 }
