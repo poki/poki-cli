@@ -12,7 +12,7 @@ interface Response {
   data: string
 }
 
-async function doit (gameId: string, filename: string, name: string, notes: string | undefined, makePublic: boolean, config: Config): Promise<Response> {
+async function doit (gameId: string, filename: string, name: string, notes: string|undefined, makePublic: boolean, config: Config): Promise<Response> {
   return await new Promise<Response>((resolve, reject) => {
     if (config.access_token === undefined) {
       return reject(new Error('No access token found'))

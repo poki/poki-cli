@@ -103,7 +103,7 @@ export async function auth (): Promise<Config> {
       }
     }
 
-    if (config != null) {
+    if (config !== undefined) {
       resolve(config)
       return
     }
