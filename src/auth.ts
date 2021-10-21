@@ -83,16 +83,18 @@ export async function refresh (config: Config): Promise<Config> {
   })
 }
 
-export async function auth (): Promise<Config> {
+export async function auth (force = false): Promise<Config> {
   return await new Promise<Config>((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')
     let config: Config|undefined
 
-    try {
-      config = JSON.parse(readFileSync(configPath, 'ascii')) as Config
-    } catch (e) {
-      // Ignore.
+    if (!force) {
+      try {
+        config = JSON.parse(readFileSync(configPath, 'ascii')) as Config
+      } catch (e) {
+        // Ignore.
+      }
     }
 
     if (typeof process.env.POKI_ACCESS_TOKEN === 'string') {
