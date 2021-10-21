@@ -84,7 +84,11 @@ export async function postToP4D (gameId: string, filename: string, name: string,
   let response = await doit(gameId, filename, name, notes, makePublic, config)
 
   if (response.statusCode === 401 && config.access_type !== 'Token') {
-    config = await refresh(config)
+    try {
+      config = await refresh(config)
+    } catch (e) {
+      config = await auth(true)
+    }
     response = await doit(gameId, filename, name, notes, makePublic, config)
   }
 
