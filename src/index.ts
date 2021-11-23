@@ -9,8 +9,10 @@ import { Config } from './config'
 async function upload (gameId: string, buildDir: string, filename: string, name: string, notes: string|undefined, makePublic: boolean): Promise<void> {
   await createZip(filename, buildDir)
 
+  const notesWithPostfix = ((notes ?? '') + '\n\nUploaded using poki-cli').trim()
+
   try {
-    const data = await postToP4D(gameId, filename, name, notes, makePublic)
+    const data = await postToP4D(gameId, filename, name, notesWithPostfix, makePublic)
 
     console.log(`
 Version uploaded successfully
@@ -90,8 +92,7 @@ const argv = yargs(process.argv.slice(2))
       .option('notes', {
         alias: 'o',
         describe: 'Version notes',
-        type: 'string',
-        default: 'Uploaded using poki-cli'
+        type: 'string'
       })
       .option('make-public', {
         alias: 'l',
