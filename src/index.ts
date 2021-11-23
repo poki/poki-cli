@@ -90,7 +90,8 @@ const argv = yargs(process.argv.slice(2))
       .option('notes', {
         alias: 'o',
         describe: 'Version notes',
-        type: 'string'
+        type: 'string',
+        default: 'Uploaded using poki-cli'
       })
       .option('make-public', {
         alias: 'l',
