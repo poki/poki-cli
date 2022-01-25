@@ -98,10 +98,20 @@ export async function auth (force = false): Promise<Config> {
     }
 
     if (typeof process.env.POKI_ACCESS_TOKEN === 'string') {
+      console.warn('POKI_ACCESS_TOKEN has been deprecated, please use POKI_UPLOAD_TOKEN')
+
       config = {
         ...config,
         access_type: 'Token',
         access_token: process.env.POKI_ACCESS_TOKEN
+      }
+    }
+
+    if (typeof process.env.POKI_UPLOAD_TOKEN === 'string') {
+      config = {
+        ...config,
+        access_type: 'Token',
+        access_token: process.env.POKI_UPLOAD_TOKEN
       }
     }
 
