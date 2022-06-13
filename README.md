@@ -3,8 +3,7 @@
 [![node](https://img.shields.io/node/v/@poki/cli.svg?style=flat-square)](https://nodejs.org/)
 [![license](https://img.shields.io/github/license/poki/poki-cli.svg?style=flat-square)](LICENSE)
 
-The [Poki for Developers](https://developers.poki.com/) command line utility.
-It allows you to upload game build directly from your terminal or CI-pipeline.
+The [Poki for Developers](https://developers.poki.com/) command line utility allows you to upload game builds directly from your terminal or CI-pipeline.
 
 ## Installation
 
@@ -57,7 +56,7 @@ Alternatively you can add this to your `package.json`:
 
 ## Uploading a build
 
-To upload a new build you can simple run:
+To upload a new build you can simply run:
 ```sh
 npx @poki/cli upload --name "$(git rev-parse --short HEAD)" --notes "$(git log -1 --pretty=%B)"
 
@@ -66,7 +65,7 @@ npm run-script poki-upload
 # Using yarn
 yarn poki-upload
 ```
-Do make sure game is build correctly in the configured build_dir.
+Do make sure your game is built correctly in the configured build_dir.
 
 When using the upload command for the first time your browser will be opened and you'll be asked to authenticate.
 The authentication credentials will be stored in a `$XDG_CONFIG_HOME/poki/auth.json`, `$HOME/.config/poki/auth.json` or `%LOCALAPPDATA%\Poki\auth.json`.
