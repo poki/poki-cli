@@ -178,7 +178,7 @@ export async function auth (force = false): Promise<Config> {
         return
       }
 
-      open(`https://developers.poki.com/signin/?cli=${encodeURIComponent(`http://localhost:${address.port}`)}`).catch(err => {
+      open(`https://app.poki.dev/signin/?cli=${encodeURIComponent(`http://localhost:${address.port}`)}`).catch(err => {
         reject(err)
       })
     })
