@@ -12,7 +12,7 @@ interface Response {
   data: string
 }
 
-async function doit (gameId: string, filename: string, name: string, notes: string|undefined, makePublic: boolean, config: Config): Promise<Response> {
+async function doit (gameId: string, filename: string, name: string, notes: string|undefined, makePublic: boolean, disableImageCompression: boolean, config: Config): Promise<Response> {
   return await new Promise<Response>((resolve, reject) => {
     if (config.access_token === undefined) {
       return reject(new Error('No access token found'))
@@ -35,6 +35,9 @@ async function doit (gameId: string, filename: string, name: string, notes: stri
     }
     if (makePublic) {
       form.append('make-public', 'true')
+    }
+    if (disableImageCompression) {
+      form.append('disable-image-compression', 'true')
     }
 
     console.log('uploading...')
@@ -79,9 +82,9 @@ interface P4dData {
   id: number
 }
 
-export async function postToP4D (gameId: string, filename: string, name: string, notes: string|undefined, makePublic: boolean): Promise<P4dData> {
+export async function postToP4D (gameId: string, filename: string, name: string, notes: string|undefined, makePublic: boolean, disableImageCompression: boolean): Promise<P4dData> {
   let config = await auth()
-  let response = await doit(gameId, filename, name, notes, makePublic, config)
+  let response = await doit(gameId, filename, name, notes, makePublic, disableImageCompression, config)
 
   if (response.statusCode === 401 && config.access_type !== 'Token') {
     try {
@@ -89,7 +92,7 @@ export async function postToP4D (gameId: string, filename: string, name: string,
     } catch (e) {
       config = await auth(true)
     }
-    response = await doit(gameId, filename, name, notes, makePublic, config)
+    response = await doit(gameId, filename, name, notes, makePublic, disableImageCompression, config)
   }
 
   if (response.statusCode !== 201) {
