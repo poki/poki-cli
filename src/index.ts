@@ -6,13 +6,13 @@ import { createZip } from './zipfile'
 import { postToP4D } from './p4d'
 import { Config } from './config'
 
-async function upload (gameId: string, buildDir: string, filename: string, name: string, notes: string|undefined, makePublic: boolean): Promise<void> {
+async function upload (gameId: string, buildDir: string, filename: string, name: string, notes: string|undefined, makePublic: boolean, disableImageCompression: boolean): Promise<void> {
   await createZip(filename, buildDir)
 
   const notesWithPostfix = ((notes ?? '') + '\n\nUploaded using poki-cli').trim()
 
   try {
-    const data = await postToP4D(gameId, filename, name, notesWithPostfix, makePublic)
+    const data = await postToP4D(gameId, filename, name, notesWithPostfix, makePublic, disableImageCompression)
 
     console.log(`
 Version uploaded successfully
@@ -100,6 +100,12 @@ const argv = yargs(process.argv.slice(2))
         default: false,
         type: 'boolean'
       })
+      .option('disable-image-compression', {
+        alias: 'i',
+        describe: 'Disable image compression',
+        default: false,
+        type: 'boolean'
+      })
   })
   .demandCommand(1)
   .example([
@@ -114,11 +120,18 @@ const argv = yargs(process.argv.slice(2))
 
 if (argv._.includes('init')) {
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  init(argv.game!, argv.buildDir as string)
+  init(argv.game as string, argv.buildDir as string)
 }
 if (argv._.includes('upload')) {
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  upload(argv.game!, argv.buildDir as string, filename, argv.name, argv.notes, argv['make-public']).catch(err => {
+  upload(argv.game as string,
+    argv.buildDir as string,
+    filename,
+    argv.name as string,
+    argv.notes as string,
+    argv['make-public'] as boolean,
+    argv['disable-image-compression'] as boolean
+  ).catch(err => {
     console.error(err)
   })
 }
