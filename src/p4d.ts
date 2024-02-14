@@ -43,10 +43,11 @@ async function doit (gameId: string, filename: string, name: string, notes: stri
     console.log('uploading...')
 
     const buffer = form.getBuffer()
+    const path = process.env.API_PATH ?? `/games/${gameId}/versions`
     const req = request({
       hostname: 'devs-api.poki.io',
       port: 443,
-      path: `/games/${gameId}/versions`,
+      path,
       method: 'POST',
       headers: {
         Authorization: `${config.access_type ?? 'Bearer'} ${config.access_token ?? ''}`,
