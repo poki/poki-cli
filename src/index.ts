@@ -18,7 +18,7 @@ async function upload (gameId: string, buildDir: string, filename: string, name:
 Version uploaded successfully
 
 Your build is still processing, once that is done the following links will be available:
-  QA: https://qa.po.ki/#?url=${data.url}
+  Inspector: https://inspector.poki.dev/?game=poki-${data.id}
   Preview: https://poki.com/en/preview/${data.game_id}/${data.id}
 `)
   } catch (err) {
