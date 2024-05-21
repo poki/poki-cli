@@ -132,6 +132,15 @@ export async function auth (force = false): Promise<Config> {
     }
 
     const server = createServer((req, res) => {
+      if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+        res.writeHead(200)
+        res.end()
+        return
+      }
+
       const q = new URL(req.url as string, 'http://localhost')
 
       if (q.pathname === '/favicon.ico') {
