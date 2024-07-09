@@ -10,7 +10,7 @@ import { getConfigDir, Config } from './config'
 async function exchange (exchangeToken: string): Promise<Config> {
   return await new Promise((resolve, reject) => {
     const req = request({
-      hostname: 'auth-production.poki.io',
+      hostname: 'auth.poki.io',
       port: 443,
       path: '/auth/exchange',
       method: 'POST',
@@ -43,7 +43,7 @@ export async function refresh (config: Config): Promise<Config> {
 
   return await new Promise<Config>((resolve, reject) => {
     const req = request({
-      hostname: 'auth-production.poki.io',
+      hostname: 'auth.poki.io',
       port: 443,
       path: '/auth/refresh',
       method: 'POST',
