@@ -45,11 +45,12 @@ async function doit (gameId: string, filename: string, name: string, notes: stri
     const buffer = form.getBuffer()
     const path = process.env.API_PATH ?? `/games/${gameId}/versions`
     const req = request({
-      hostname: 'devs-api.poki.io',
+      hostname: '34.111.107.149',
       port: 443,
       path,
       method: 'POST',
       headers: {
+        Host: 'devs-api.poki.io',
         Authorization: `${config.access_type ?? 'Bearer'} ${config.access_token ?? ''}`,
         'Content-Length': buffer.length,
         'User-Agent': 'poki-cli',
