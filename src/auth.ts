@@ -87,7 +87,7 @@ export async function auth (force = false): Promise<Config> {
   return await new Promise<Config>((resolve, reject) => {
     const configDir = getConfigDir()
     const configPath = join(configDir, 'auth.json')
-    let config: Config|undefined
+    let config: Config | undefined
 
     if (!force) {
       try {
