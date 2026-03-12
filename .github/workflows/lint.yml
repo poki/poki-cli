@@ -4,19 +4,15 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [12.x]
-
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: Build and Test
-      uses: actions/setup-node@v1
+      uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 20
+        cache: yarn
     - name: yarn
       run: |
         yarn

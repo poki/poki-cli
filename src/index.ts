@@ -6,7 +6,7 @@ import { createZip } from './zipfile'
 import { postToP4D } from './p4d'
 import { Config } from './config'
 
-async function upload (gameId: string, buildDir: string, filename: string, name: string, notes: string|undefined, makePublic: boolean, disableImageCompression: boolean): Promise<void> {
+async function upload (gameId: string, buildDir: string, filename: string, name: string, notes: string | undefined, makePublic: boolean, disableImageCompression: boolean): Promise<void> {
   await createZip(filename, buildDir)
 
   const notesWithPostfix = ((notes ?? '') + '\n\nUploaded using poki-cli').trim()
