@@ -1,6 +1,6 @@
 {
   "name": "@poki/cli",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Poki for Developers command line utility",
   "keywords": [
     "cli",
