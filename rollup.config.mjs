@@ -1,4 +1,5 @@
 import { babel } from '@rollup/plugin-babel'
+import resolve from '@rollup/plugin-node-resolve'
 import typescript from 'rollup-plugin-typescript2'
 
 export default {
@@ -10,6 +11,7 @@ export default {
     exports: 'none'
   }],
   plugins: [
+    resolve(),
     typescript(),
     babel({ babelHelpers: 'bundled' })
   ],
@@ -21,7 +23,6 @@ export default {
     'http',
     'os',
     'path',
-    'open',
     'yargs'
   ]
 }
