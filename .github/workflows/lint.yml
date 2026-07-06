@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: hetzner
 
     steps:
     - uses: actions/checkout@v4
@@ -12,7 +12,8 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 20
-        cache: yarn
+    - name: Enable Corepack
+      run: corepack enable
     - name: yarn
       run: |
         yarn
