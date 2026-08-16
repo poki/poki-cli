@@ -1,0 +1,6 @@
+import type { CommandSpecBuilder } from './types'
+
+export function addAudienceCommandSpecs ({ add, example, formatOption, group, option }: CommandSpecBuilder): void {
+  group('audiences', 'Discover bundled content-category names and IDs offline.')
+  add({ path: ['audiences', 'list'], summary: 'List bundled content-category names, IDs, and test-targeting availability.', options: [option('--testing-only', 'boolean', 'Return only categories enabled for Playtest and Player Fit targeting.', { default: false }), formatOption], behavior: ['Games suggested-category persists the name value. Playtest and Player Fit targeting persist numeric IDs.', 'The snapshot is bundled and deterministic but can lag backend changes; mutation responses remain authoritative.'], examples: [example('poki audiences list --format json', 'Choose a category name for games create or games update.'), example('poki audiences list --testing-only --format json', 'Choose a numeric category ID for a Playtest or Player Fit request without an extra API call.')], network: { method: 'none', path: 'bundled category snapshot', contacts_api: false }, risk: 'offline', output: { shape: '{data: [{id, name, enabled_for_testing}], meta: {total, testing_only, bundled_snapshot, snapshot_advisory, mutation_backend_authoritative, refresh_requires_cli_update, usage}}' } })
+}
