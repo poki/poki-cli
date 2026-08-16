@@ -1,6 +1,6 @@
 {
   "name": "@poki/cli",
-  "version": "0.1.19",
+  "version": "0.2.0",
   "description": "Poki for Developers command line utility",
   "keywords": [
     "cli",
@@ -14,6 +14,9 @@
     "type": "git",
     "url": "git+https://github.com/poki/poki-cli.git"
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "license": "ISC",
   "files": [
     "bin/index.js"
@@ -23,30 +26,42 @@
   },
   "scripts": {
     "cli": "node bin/index.js",
-    "lint": "ts-standard src rollup.config.mjs --fix",
+    "lint": "ts-standard src test scripts rollup.config.mjs --fix",
+    "lint:check": "ts-standard src test scripts rollup.config.mjs",
+    "test": "node scripts/test.mjs",
+    "test:package": "node scripts/verify-package.mjs",
+    "audit:dependencies": "yarn audit",
+    "typecheck": "tsc --noEmit",
+    "validate:source": "yarn lint:check && yarn typecheck && yarn test",
+    "validate": "yarn validate:source && yarn test:package && yarn build",
+    "release:validate": "yarn validate:source && yarn build && yarn audit:dependencies",
+    "release:check": "yarn release:validate && yarn test:package --require-clean",
+    "release:publish": "yarn release:validate && yarn test:package --require-clean --publish",
     "build": "rollup -c rollup.config.mjs",
-    "prepublish": "yarn lint && yarn build"
+    "prepack": "yarn build",
+    "prepublishOnly": "yarn release:check"
   },
   "dependencies": {
-    "archiver": "^7.0.1",
-    "form-data": "^4.0.5",
+    "archiver": "^8.0.0",
+    "form-data": "^4.0.6",
     "open": "^11.0.0",
-    "yargs": "^18.0.0"
+    "yargs": "^17.7.2"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.0",
-    "@rollup/plugin-babel": "^6.1.0",
+    "@toon-format/toon": "^4.0.0",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@types/archiver": "^7.0.0",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/archiver": "^8.0.0",
+    "@types/node": "^24.0.0",
     "@types/yargs": "^17.0.35",
     "rollup": "^4.59.0",
-    "rollup-plugin-typescript2": "^0.36.0",
     "ts-standard": "^12.0.2",
     "tslib": "^2.8.1",
+    "tsx": "^4.20.0",
     "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.7.0"
   }
 }
