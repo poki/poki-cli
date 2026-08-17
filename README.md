@@ -127,27 +127,6 @@ npm install --save-dev --ignore-scripts --no-audit --no-fund @poki/cli@AVAILABLE
 
 The LLM should choose the command matching the installation mode, verify it with `poki --version` or `npx @poki/cli --version`, and must not replay the command that already completed. The advisory never self-updates the CLI, never blocks the completed command, and follows only npm's stable `latest` tag. Help, version, auth, offline commands, ordinary dry-runs, analytics validation, and the deprecated legacy upload path do not perform the update lookup. Set `POKI_CLI_UPDATE_CHECK=0` to opt out. Run `poki help updates` for the complete machine-readable contract.
 
-## Release
-
-Publish only through the repository release command:
-
-```sh
-yarn release:publish
-```
-
-It validates the source and dependency audit, builds a tarball from the active Git index with lifecycle scripts explicitly enabled, verifies that exact tarball through a real install, and publishes the verified archive. npm publish options may be appended, for example `yarn release:publish --dry-run`. Do not use bare `npm publish`: user or global npm configuration can disable lifecycle scripts and omit the generated CLI executable.
-
-To publish an experiment without moving the stable `latest` [npm dist-tag](https://docs.npmjs.com/cli/dist-tag/):
-
-1. Set and stage a unique prerelease version such as `0.2.0-experimental.0`.
-2. Run `yarn release:publish -- --tag experimental`.
-3. Verify both channels independently with `npm view @poki/cli dist-tags --json`.
-4. Opt-in developers install it globally with `npm install --global --ignore-scripts @poki/cli@experimental` or locally with `npm install --save-dev --ignore-scripts @poki/cli@experimental`.
-5. Give every subsequent experiment a unique version such as `0.2.0-experimental.1` and publish it with the same explicit tag.
-6. Later set the final `0.2.0` version and run `yarn release:publish` normally to move `latest`.
-
-The release command rejects a prerelease version unless it has exactly one explicit, valid, non-`latest` `--tag`. These npm commands change registry versions and dist-tags only; they do not create a Git tag.
-
 ## License
 
 The CLI itself is [ISC licensed](LICENSE). The published `bin/index.js` is a bundle that also contains MIT-licensed third-party code; the packages it covers and their required copyright and permission notices are listed at the top of that file.
