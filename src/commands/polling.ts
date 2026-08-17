@@ -115,7 +115,18 @@ export async function pollUntil (
     }
     const remainingBeforeDelay = deadline - Date.now()
     if (remainingBeforeDelay <= 0) throw timeoutError()
-    await waitFor(Math.min(intervalMs, remainingBeforeDelay))
+    if (intervalMs >= remainingBeforeDelay) {
+      // A timer may wake just before its requested deadline on some platforms.
+      // Keep waiting for the absolute deadline instead of starting another
+      // request with only a rounding sliver of the wait budget remaining.
+      let remaining = remainingBeforeDelay
+      while (remaining > 0) {
+        await waitFor(remaining)
+        remaining = deadline - Date.now()
+      }
+      throw timeoutError()
+    }
+    await waitFor(intervalMs)
   }
 }
 

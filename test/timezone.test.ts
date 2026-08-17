@@ -8,12 +8,13 @@ import test from 'node:test'
 
 import { repository, RunResult, temporaryDirectory } from './helpers'
 
-const tsx = createRequire(import.meta.url).resolve('tsx', { paths: [repository] })
+const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx', { paths: [repository] })).href
 
 // The spawned processes must not see POKI_* overrides or the developer's real
-// XDG_CONFIG_HOME (and with it real credentials) from the inherited shell.
+// platform config root (and with it real credentials) from the inherited shell.
 const inheritedEnv: NodeJS.ProcessEnv = Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => !name.startsWith('POKI_') && name !== 'XDG_CONFIG_HOME')
+  Object.entries(process.env).filter(([name]) =>
+    !name.startsWith('POKI_') && name !== 'XDG_CONFIG_HOME' && name !== 'LOCALAPPDATA')
 )
 
 // Unlike helpers.runCli, this spawns an arbitrary script (not the CLI entry

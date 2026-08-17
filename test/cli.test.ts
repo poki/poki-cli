@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { apiHarness, authEnvironment, completion, jsonApi, repository, requestBody, runCli, spawnCli, temporaryDirectory } from './helpers'
+import { apiHarness, authEnvironment, completion, jsonApi, pokiConfigDirectory, repository, requestBody, runCli, spawnCli, temporaryDirectory } from './helpers'
 
 async function documentedExitCodes (): Promise<string[]> {
   const help = await runCli(['help', 'games', 'get', '--format', 'json'])
@@ -131,7 +131,7 @@ void test('review and feedback lists remain game-scoped and feedback date flags 
 void test('auth logout removes credentials once confirmed and supports an offline dry run', async t => {
   const directory = temporaryDirectory(t, 'logout')
   const env = authEnvironment(directory)
-  const authPath = join(directory, 'poki', 'auth.json')
+  const authPath = join(pokiConfigDirectory(directory), 'auth.json')
 
   const preview = await runCli(['auth', 'logout', '--dry-run', '--format', 'json'], { env })
   assert.equal(preview.code, 0, preview.stderr)

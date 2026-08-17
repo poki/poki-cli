@@ -4,19 +4,19 @@ import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'nod
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { listen, runCli, temporaryDirectory } from './helpers'
+import { configHomeEnvironment, listen, pokiConfigDirectory, runCli, temporaryDirectory } from './helpers'
 
 // Unlike helpers.authEnvironment, refresh tests need to seed an arbitrary auth
 // document and inject separate API and authentication servers into the private
 // test entry point.
-function authEnvironment (root: string, auth: Record<string, unknown>, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
-  const config = join(root, 'poki')
+function seededAuthEnvironment (root: string, auth: Record<string, unknown>, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const config = pokiConfigDirectory(root)
   mkdirSync(config, { recursive: true })
   writeFileSync(join(config, 'auth.json'), JSON.stringify(auth))
   // Pin the seeded mode instead of inheriting the developer's umask, so the
   // permission repair below is asserted against a genuinely readable file.
   if (process.platform !== 'win32') chmodSync(join(config, 'auth.json'), 0o644)
-  return { XDG_CONFIG_HOME: root, ...extra }
+  return { ...configHomeEnvironment(root), ...extra }
 }
 
 void test('a 401 triggers one refresh, replays the request once, and persists the new tokens', async t => {
@@ -47,7 +47,7 @@ void test('a 401 triggers one refresh, replays the request once, and persists th
   })
   const apiUrl = await listen(t, apiServer)
 
-  const env = authEnvironment(directory, { access_type: 'Bearer', access_token: 'stale', refresh_token: 'r1' }, {
+  const env = seededAuthEnvironment(directory, { access_type: 'Bearer', access_token: 'stale', refresh_token: 'r1' }, {
     POKI_CLI_TEST_API_URL: apiUrl,
     POKI_CLI_TEST_AUTH_URL: refreshUrl
   })
@@ -62,7 +62,7 @@ void test('a 401 triggers one refresh, replays the request once, and persists th
   assert.deepEqual(refreshRequests[0].body, { refresh_token: 'r1' })
 
   // The refreshed tokens were written back through writeStoredAuth.
-  const authPath = join(directory, 'poki', 'auth.json')
+  const authPath = join(pokiConfigDirectory(directory), 'auth.json')
   const stored = JSON.parse(readFileSync(authPath, 'ascii'))
   assert.equal(stored.access_token, 'fresh')
   assert.equal(stored.refresh_token, 'r2')
@@ -100,7 +100,7 @@ void test('a rejected refresh becomes AUTH_REQUIRED with exit 3 and no second AP
   })
   const apiUrl = await listen(t, apiServer)
 
-  const env = authEnvironment(directory, { access_type: 'Bearer', access_token: 'stale', refresh_token: 'r1' }, {
+  const env = seededAuthEnvironment(directory, { access_type: 'Bearer', access_token: 'stale', refresh_token: 'r1' }, {
     POKI_CLI_TEST_API_URL: apiUrl,
     POKI_CLI_TEST_AUTH_URL: refreshUrl
   })
@@ -113,7 +113,7 @@ void test('a rejected refresh becomes AUTH_REQUIRED with exit 3 and no second AP
   assert.equal(refreshRequests, 1)
 
   // The stale credentials stay on disk untouched.
-  const stored = JSON.parse(readFileSync(join(directory, 'poki', 'auth.json'), 'ascii'))
+  const stored = JSON.parse(readFileSync(join(pokiConfigDirectory(directory), 'auth.json'), 'ascii'))
   assert.equal(stored.access_token, 'stale')
   assert.equal(stored.refresh_token, 'r1')
 })

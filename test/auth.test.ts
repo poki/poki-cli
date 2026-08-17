@@ -5,9 +5,10 @@ import { join } from 'node:path'
 import test, { TestContext } from 'node:test'
 
 import { launchBrowser, login, refreshStoredAuth } from '../src/auth'
+import { getConfigDir } from '../src/config'
 import { CliError } from '../src/errors'
 import { CLI_USER_AGENT } from '../src/version'
-import { runCli, temporaryDirectory } from './helpers'
+import { configHomeEnvironment, configHomeEnvironmentVariable, pokiConfigDirectory, runCli, temporaryDirectory } from './helpers'
 
 void test('browser launch dynamically loads and calls the packaged opener', async () => {
   let imports = 0
@@ -35,17 +36,17 @@ function fabricatedJwt (claims: Record<string, unknown>): string {
 // for the duration of one test, restoring the environment afterwards.
 function isolateAuthEnvironment (t: TestContext, slug: string): string {
   const original = {
-    configHome: process.env.XDG_CONFIG_HOME,
+    configHome: process.env[configHomeEnvironmentVariable],
     serviceEnv: process.env.SERVICE_ENV,
     timeoutMs: process.env.POKI_API_TIMEOUT_MS
   }
   t.after(() => {
-    if (original.configHome === undefined) delete process.env.XDG_CONFIG_HOME; else process.env.XDG_CONFIG_HOME = original.configHome
+    if (original.configHome === undefined) Reflect.deleteProperty(process.env, configHomeEnvironmentVariable); else process.env[configHomeEnvironmentVariable] = original.configHome
     if (original.serviceEnv === undefined) delete process.env.SERVICE_ENV; else process.env.SERVICE_ENV = original.serviceEnv
     if (original.timeoutMs === undefined) delete process.env.POKI_API_TIMEOUT_MS; else process.env.POKI_API_TIMEOUT_MS = original.timeoutMs
   })
   const directory = temporaryDirectory(t, slug)
-  process.env.XDG_CONFIG_HOME = directory
+  process.env[configHomeEnvironmentVariable] = directory
   delete process.env.SERVICE_ENV
   return directory
 }
@@ -67,7 +68,7 @@ async function withAuthServer (
 
 void test('unusable credentials fail without opening a browser and upload tokens are never accepted', async t => {
   const directory = temporaryDirectory(t, 'auth-corrupt')
-  const config = join(directory, 'poki')
+  const config = pokiConfigDirectory(directory)
   mkdirSync(config, { recursive: true })
   writeFileSync(join(config, 'auth.json'), '{invalid')
 
@@ -75,7 +76,7 @@ void test('unusable credentials fail without opening a browser and upload tokens
   // instead of a crash, and the legacy POKI_UPLOAD_TOKEN must not satisfy
   // generic API commands.
   const result = await runCli(['games', 'list', '--format', 'json'], {
-    env: { XDG_CONFIG_HOME: directory, POKI_UPLOAD_TOKEN: 'upload-only-token' }
+    env: { ...configHomeEnvironment(directory), POKI_UPLOAD_TOKEN: 'upload-only-token' }
   })
   assert.equal(result.code, 3, result.stderr)
   assert.equal(result.stdout, '')
@@ -92,7 +93,7 @@ void test('unusable credentials fail without opening a browser and upload tokens
 
 void test('stored credentials are decoded before use and invalid files remain untouched', async t => {
   const directory = temporaryDirectory(t, 'auth-invalid-values')
-  const config = join(directory, 'poki')
+  const config = pokiConfigDirectory(directory)
   mkdirSync(config, { recursive: true })
   const authPath = join(config, 'auth.json')
   const invalidCredentials: unknown[] = [
@@ -107,7 +108,7 @@ void test('stored credentials are decoded before use and invalid files remain un
   for (const credentials of invalidCredentials) {
     const storedText = JSON.stringify(credentials)
     writeFileSync(authPath, storedText, 'utf8')
-    const result = await runCli(['auth', 'status', '--format', 'json'], { env: { XDG_CONFIG_HOME: directory } })
+    const result = await runCli(['auth', 'status', '--format', 'json'], { env: configHomeEnvironment(directory) })
     assert.equal(result.code, 0, result.stderr)
     assert.deepEqual(JSON.parse(result.stdout), {
       authenticated: false,
@@ -121,7 +122,7 @@ void test('stored credentials are decoded before use and invalid files remain un
 
 void test('auth status decodes stored JWT expiry offline and reports refreshability', async t => {
   const directory = temporaryDirectory(t, 'auth-expired')
-  const config = join(directory, 'poki')
+  const config = pokiConfigDirectory(directory)
   mkdirSync(config, { recursive: true })
   const token = fabricatedJwt({ sub: 'user-1', exp: 1000000000 })
 
@@ -130,7 +131,7 @@ void test('auth status decodes stored JWT expiry offline and reports refreshabil
     access_token: token,
     refresh_token: 'refresh-1'
   }))
-  const refreshable = await runCli(['auth', 'status', '--format', 'json'], { env: { XDG_CONFIG_HOME: directory } })
+  const refreshable = await runCli(['auth', 'status', '--format', 'json'], { env: configHomeEnvironment(directory) })
   assert.equal(refreshable.code, 0, refreshable.stderr)
   assert.deepEqual(JSON.parse(refreshable.stdout), {
     authenticated: false,
@@ -143,14 +144,14 @@ void test('auth status decodes stored JWT expiry offline and reports refreshabil
   })
 
   writeFileSync(join(config, 'auth.json'), JSON.stringify({ access_type: 'Bearer', access_token: token }))
-  const unrefreshable = await runCli(['auth', 'status', '--format', 'json'], { env: { XDG_CONFIG_HOME: directory } })
+  const unrefreshable = await runCli(['auth', 'status', '--format', 'json'], { env: configHomeEnvironment(directory) })
   assert.equal(unrefreshable.code, 0, unrefreshable.stderr)
   assert.equal(JSON.parse(unrefreshable.stdout).expired, true)
   assert.equal(JSON.parse(unrefreshable.stdout).refreshable, false)
 
   const invalidExpiry = fabricatedJwt({ sub: 'user-1', exp: 'not-a-number' })
   writeFileSync(join(config, 'auth.json'), JSON.stringify({ access_type: 'Bearer', access_token: invalidExpiry }))
-  const withoutExpiry = await runCli(['auth', 'status', '--format', 'json'], { env: { XDG_CONFIG_HOME: directory } })
+  const withoutExpiry = await runCli(['auth', 'status', '--format', 'json'], { env: configHomeEnvironment(directory) })
   assert.equal(withoutExpiry.code, 0, withoutExpiry.stderr)
   assert.deepEqual(JSON.parse(withoutExpiry.stdout), {
     authenticated: true,
@@ -163,7 +164,7 @@ void test('auth status decodes stored JWT expiry offline and reports refreshabil
 
 void test('auth logout --yes returns a structured result when nothing is stored', async t => {
   const directory = temporaryDirectory(t, 'auth-logout')
-  const result = await runCli(['auth', 'logout', '--yes', '--format', 'json'], { env: { XDG_CONFIG_HOME: directory } })
+  const result = await runCli(['auth', 'logout', '--yes', '--format', 'json'], { env: configHomeEnvironment(directory) })
   assert.equal(result.code, 0, result.stderr)
   assert.equal(result.stderr, '')
   assert.deepEqual(JSON.parse(result.stdout), { logged_out: false })
@@ -171,7 +172,7 @@ void test('auth logout --yes returns a structured result when nothing is stored'
 
 void test('acceptance authentication is isolated from production credentials', async t => {
   const directory = temporaryDirectory(t, 'auth-acceptance-scope')
-  const applicationDirectory = join(directory, process.platform === 'win32' ? 'Poki' : 'poki')
+  const applicationDirectory = pokiConfigDirectory(directory)
   const acceptanceDirectory = join(applicationDirectory, 'acceptance')
   mkdirSync(acceptanceDirectory, { recursive: true })
   const productionPath = join(applicationDirectory, 'auth.json')
@@ -179,9 +180,7 @@ void test('acceptance authentication is isolated from production credentials', a
   const productionCredentials = JSON.stringify({ access_type: 'Bearer', access_token: 'production-token' })
   writeFileSync(productionPath, productionCredentials)
   writeFileSync(acceptancePath, JSON.stringify({ access_type: 'Bearer', access_token: 'acceptance-token' }))
-  const configEnvironment = process.platform === 'win32'
-    ? { LOCALAPPDATA: directory }
-    : { XDG_CONFIG_HOME: directory }
+  const configEnvironment = configHomeEnvironment(directory)
   const env = { ...configEnvironment, SERVICE_ENV: 'acceptance' }
 
   const status = await runCli(['auth', 'status', '--format', 'json'], { env })
@@ -232,14 +231,14 @@ void test('refreshStoredAuth merges the response over the stored config and pers
     assert.equal(contentType, 'application/json')
     assert.equal(userAgent, CLI_USER_AGENT)
     assert.deepEqual(JSON.parse(requestBody), { refresh_token: 'refresh-1' })
-    assert.deepEqual(JSON.parse(readFileSync(join(directory, 'poki', 'auth.json'), 'utf8')), refreshed)
+    assert.deepEqual(JSON.parse(readFileSync(join(pokiConfigDirectory(directory), 'auth.json'), 'utf8')), refreshed)
   })
 })
 
 void test('acceptance refresh cannot replace production credentials', async t => {
   const directory = isolateAuthEnvironment(t, 'auth-acceptance-refresh')
   process.env.SERVICE_ENV = 'acceptance'
-  const productionDirectory = join(directory, 'poki')
+  const productionDirectory = pokiConfigDirectory(directory)
   const acceptanceDirectory = join(productionDirectory, 'acceptance')
   mkdirSync(acceptanceDirectory, { recursive: true })
   const productionPath = join(productionDirectory, 'auth.json')
@@ -284,7 +283,7 @@ void test('a 200 refresh response with a non-JSON body rejects instead of crashi
 void test('malformed successful refresh credentials are rejected without changing stored authentication', async t => {
   const directory = isolateAuthEnvironment(t, 'auth-refresh-malformed')
 
-  const configDirectory = join(directory, 'poki')
+  const configDirectory = pokiConfigDirectory(directory)
   mkdirSync(configDirectory, { recursive: true })
   const stored = {
     access_type: 'Bearer',
@@ -395,7 +394,7 @@ void test('an oversized refresh response is rejected without exposing its conten
         error.message === 'The authentication refresh response was too large.' &&
         !error.message.includes(privateMarker)
     )
-    assert.equal(existsSync(join(directory, 'poki', 'auth.json')), false)
+    assert.equal(existsSync(join(pokiConfigDirectory(directory), 'auth.json')), false)
   })
 })
 
@@ -427,24 +426,31 @@ async function withRefreshedCredentials (
 void test('refreshed credentials are published atomically into an owner-only file', async t => {
   const directory = isolateAuthEnvironment(t, 'auth-atomic')
 
-  const configDirectory = join(directory, 'poki')
+  const configDirectory = pokiConfigDirectory(directory)
   const authPath = join(configDirectory, 'auth.json')
   await withRefreshedCredentials(configDirectory, 0o644, async (stored, storedText, authUrl) => {
-    // A descriptor opened before the refresh stands in for a concurrent
-    // invocation that is already reading auth.json. Rewriting the destination
-    // in place would truncate it and expose the fresh token through the
-    // pre-existing world-readable inode, so that inode must keep both the
-    // complete previous document and its old mode.
-    const concurrentReader = openSync(authPath, 'r')
     const before = statSync(authPath).ino
-    try {
+
+    if (process.platform === 'win32') {
+      // Windows does not let rename replace a destination while Node holds an
+      // open descriptor for it. readStoredAuth reads and closes synchronously,
+      // so publish after that reader has completed while still checking that
+      // the destination inode is replaced instead of rewritten in place.
       await refreshStoredAuth(stored, authUrl)
-      assert.equal(readFileSync(concurrentReader, 'utf8'), storedText)
-      if (process.platform !== 'win32') {
+    } else {
+      // A descriptor opened before the refresh stands in for a concurrent
+      // invocation that is already reading auth.json. Rewriting the destination
+      // in place would truncate it and expose the fresh token through the
+      // pre-existing world-readable inode, so that inode must keep both the
+      // complete previous document and its old mode.
+      const concurrentReader = openSync(authPath, 'r')
+      try {
+        await refreshStoredAuth(stored, authUrl)
+        assert.equal(readFileSync(concurrentReader, 'utf8'), storedText)
         assert.equal(fstatSync(concurrentReader).mode & 0o777, 0o644)
+      } finally {
+        closeSync(concurrentReader)
       }
-    } finally {
-      closeSync(concurrentReader)
     }
 
     assert.equal(JSON.parse(readFileSync(authPath, 'utf8')).access_token, 'fresh-token')
@@ -463,7 +469,7 @@ void test('a failed credential write keeps the previous credentials usable', {
 }, async t => {
   const directory = isolateAuthEnvironment(t, 'auth-write-denied')
 
-  const configDirectory = join(directory, 'poki')
+  const configDirectory = pokiConfigDirectory(directory)
   const authPath = join(configDirectory, 'auth.json')
   await withRefreshedCredentials(configDirectory, 0o600, async (stored, storedText, authUrl) => {
     // A directory that forbids creating names blocks the temporary file. An
@@ -484,7 +490,7 @@ void test('a failed credential write keeps the previous credentials usable', {
 void test('a failed credential publication leaves no temporary file behind', async t => {
   const directory = isolateAuthEnvironment(t, 'auth-publish-failure')
 
-  const configDirectory = join(directory, 'poki')
+  const configDirectory = pokiConfigDirectory(directory)
   const authPath = join(configDirectory, 'auth.json')
   await withRefreshedCredentials(configDirectory, 0o600, async (stored, _storedText, authUrl) => {
     // Publication is the last step, so a destination that cannot be replaced
@@ -497,7 +503,7 @@ void test('a failed credential publication leaves no temporary file behind', asy
   })
 })
 
-void test('login reads interactivity from stdin and stderr, not from the structured stdout channel', async t => {
+void test('login reads interactivity from stdin and stderr, not from the structured stdout channel', { timeout: 30000 }, async t => {
   const directory = isolateAuthEnvironment(t, 'auth-login-tty')
 
   const streams = [process.stdin, process.stdout, process.stderr]
@@ -510,7 +516,8 @@ void test('login reads interactivity from stdin and stderr, not from the structu
   // started on the way there.
   const blocked = join(directory, 'not-a-directory')
   writeFileSync(blocked, '')
-  process.env.XDG_CONFIG_HOME = blocked
+  process.env[configHomeEnvironmentVariable] = blocked
+  assert.equal(getConfigDir(), join(blocked, process.platform === 'win32' ? 'Poki' : 'poki'))
 
   // Redirecting stdout is how an agent captures the structured result, so it
   // must not decide whether a human can complete the browser flow.

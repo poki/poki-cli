@@ -3,7 +3,7 @@ import { realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test, { TestContext } from 'node:test'
 
-import { RunResult, runCli, temporaryDirectory } from './helpers'
+import { configHomeEnvironment, RunResult, runCli, temporaryDirectory } from './helpers'
 
 // realpathSync avoids macOS /var vs /private/var mismatches when asserting
 // the absolute configuration path reported by `poki context`.
@@ -14,7 +14,7 @@ function projectDirectory (t: TestContext, slug: string): string {
 async function runContext (directory: string): Promise<RunResult> {
   return await runCli(['context', '--format', 'json'], {
     cwd: directory,
-    env: { XDG_CONFIG_HOME: join(directory, 'empty-config') }
+    env: configHomeEnvironment(join(directory, 'empty-config'))
   })
 }
 
@@ -86,7 +86,7 @@ void test('an empty-string game_id does not satisfy game-scoped commands', async
 
   const result = await runCli(['versions', 'list', '--format', 'json'], {
     cwd: directory,
-    env: { XDG_CONFIG_HOME: join(directory, 'empty-config') }
+    env: configHomeEnvironment(join(directory, 'empty-config'))
   })
   assert.equal(result.code, 2)
   assert.equal(result.stdout, '')

@@ -24,7 +24,7 @@ import {
   UpdateNoticeDocument,
   UPDATE_STATE_FILENAME
 } from '../src/update'
-import { apiHarness, authEnvironment, completion, jsonApi, parseToon, runCli, spawnCli, temporaryDirectory } from './helpers'
+import { apiHarness, authEnvironment, completion, jsonApi, parseToon, pokiConfigDirectory, runCli, spawnCli, temporaryDirectory } from './helpers'
 
 interface CapturedNotice {
   document: UpdateNoticeDocument
@@ -398,7 +398,7 @@ void test('a failed API command emits only its structured error and does not cla
   const error = JSON.parse(result.stderr)
   assert.equal(error.error.code, 'SERVER_ERROR')
   assert.equal(error.notice, undefined)
-  assert.equal(stateAt(join(harness.directory, 'poki')).last_prompt_at, undefined)
+  assert.equal(stateAt(pokiConfigDirectory(harness.directory)).last_prompt_at, undefined)
 })
 
 void test('offline, auth, preview, validation, and legacy invocations never run npm or create update state', async t => {
@@ -432,6 +432,6 @@ void test('offline, auth, preview, validation, and legacy invocations never run 
   }
 
   assert.deepEqual(npmCalls(directory), [])
-  assert.equal(existsSync(join(configRoot, 'poki', UPDATE_STATE_FILENAME)), false)
-  assert.equal(existsSync(join(configRoot, 'poki', UPDATE_LOCK_FILENAME)), false)
+  assert.equal(existsSync(join(pokiConfigDirectory(configRoot), UPDATE_STATE_FILENAME)), false)
+  assert.equal(existsSync(join(pokiConfigDirectory(configRoot), UPDATE_LOCK_FILENAME)), false)
 })

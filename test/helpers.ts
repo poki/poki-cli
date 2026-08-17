@@ -9,6 +9,8 @@ import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { TestContext } from 'node:test'
 
+import { getConfigDir } from '../src/config'
+
 export interface RunResult {
   code: number
   stdout: string
@@ -18,24 +20,36 @@ export interface RunResult {
 export const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const entry = join(repository, 'test/cli-entry.ts')
 const productEntry = join(repository, 'src/index.ts')
-const tsx = createRequire(import.meta.url).resolve('tsx', { paths: [repository] })
+const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx', { paths: [repository] })).href
 
 // Spawned CLIs must never observe a developer's exported service configuration
-// or their real XDG config directory, so tests stay hermetic on any machine.
+// or their real platform config directory, so tests stay hermetic on any machine.
 // The private entry point injects unroutable API/auth URLs by default; the
 // production executable has no corresponding environment override.
 export const UNROUTABLE_URL = 'http://127.0.0.1:1'
+
+export const configHomeEnvironmentVariable = process.platform === 'win32'
+  ? 'LOCALAPPDATA'
+  : 'XDG_CONFIG_HOME'
+
+export function configHomeEnvironment (root: string): NodeJS.ProcessEnv {
+  return { [configHomeEnvironmentVariable]: root }
+}
+
+export function pokiConfigDirectory (root: string): string {
+  return getConfigDir(configHomeEnvironment(root))
+}
 
 // The private config directory only exists for the lifetime of the CLI process
 // it belongs to, so `discard` is the moment it is provably unobservable.
 function hermeticEnvironment (): { environment: NodeJS.ProcessEnv, discard: () => void } {
   const environment: NodeJS.ProcessEnv = {}
   for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith('POKI_') || key === 'SERVICE_ENV' || key === 'XDG_CONFIG_HOME') continue
+    if (key.startsWith('POKI_') || key === 'SERVICE_ENV' || key === 'XDG_CONFIG_HOME' || key === 'LOCALAPPDATA') continue
     environment[key] = value
   }
   const configHome = mkdtempSync(join(tmpdir(), 'poki-cli-test-'))
-  environment.XDG_CONFIG_HOME = configHome
+  Object.assign(environment, configHomeEnvironment(configHome))
   environment.POKI_CLI_TEST_API_URL = UNROUTABLE_URL
   environment.POKI_CLI_TEST_AUTH_URL = UNROUTABLE_URL
   // Update checks are tested explicitly. Every other test stays offline and
@@ -126,11 +140,11 @@ export async function listen (t: TestContext, server: Server): Promise<string> {
 }
 
 export function authEnvironment (root: string, apiUrl?: string): NodeJS.ProcessEnv {
-  const config = join(root, 'poki')
+  const config = pokiConfigDirectory(root)
   mkdirSync(config, { recursive: true })
   writeFileSync(join(config, 'auth.json'), JSON.stringify({ access_type: 'Bearer', access_token: 'test-token' }))
   return {
-    XDG_CONFIG_HOME: root,
+    ...configHomeEnvironment(root),
     ...(apiUrl === undefined ? {} : { POKI_CLI_TEST_API_URL: apiUrl })
   }
 }
