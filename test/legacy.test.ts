@@ -12,7 +12,7 @@ import { legacyHumanUpload, readLegacyProjectConfig } from '../src/legacy'
 import { finalizeP4dResponse, LegacyTransport, LegacyUploadError, legacyUploadTimeoutMs, postToP4D } from '../src/p4d'
 import { CLI_USER_AGENT } from '../src/version'
 import { createZip } from '../src/zipfile'
-import { parseToon, repository, runCli, temporaryDirectory } from './helpers'
+import { configHomeEnvironment, parseToon, repository, runCli, temporaryDirectory } from './helpers'
 
 const packageVersion = (JSON.parse(readFileSync(join(repository, 'package.json'), 'utf8')) as { version: string }).version
 
@@ -88,7 +88,7 @@ void test('legacy upload retains false --version forms and the option terminator
   for (const args of invocations) {
     const result = await runCli(args, {
       cwd: directory,
-      env: { XDG_CONFIG_HOME: directory, POKI_UPLOAD_TOKEN: 'tok' }
+      env: { ...configHomeEnvironment(directory), POKI_UPLOAD_TOKEN: 'tok' }
     })
     assert.equal(result.code, 2, `${args.join(' ')}: ${result.stderr}`)
     assert.equal(result.stdout, '', args.join(' '))
@@ -148,7 +148,7 @@ void test('legacy upload reports ZIP creation failures with a non-zero exit', {
     'upload', '--game', 'g', '--build-dir', build
   ], {
     cwd: directory,
-    env: { XDG_CONFIG_HOME: directory, POKI_UPLOAD_TOKEN: 'tok' }
+    env: { ...configHomeEnvironment(directory), POKI_UPLOAD_TOKEN: 'tok' }
   })
   assert.equal(result.code, 2, result.stderr)
   assert.equal(result.stdout, '')

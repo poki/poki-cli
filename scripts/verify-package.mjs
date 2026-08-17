@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { constants } from 'node:fs'
-import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { access, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { dirname, join, sep } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -11,7 +10,13 @@ import { isBuiltin } from 'node:module'
 import { resolveReleasePublishArguments } from './release-tag.mjs'
 
 const projectDirectory = fileURLToPath(new URL('..', import.meta.url))
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+// Windows command scripts require a shell and newer Node releases reject
+// spawning npm.cmd directly. Invoke npm's JavaScript entry point with the
+// active Node executable instead, preserving every argument without a shell.
+const npmCommand = process.platform === 'win32' ? process.execPath : 'npm'
+const npmArgumentPrefix = process.platform === 'win32'
+  ? [join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')]
+  : []
 const arguments_ = process.argv.slice(2)
 const shouldPublish = arguments_.includes('--publish')
 const publishArguments = arguments_.filter(argument => argument !== '--publish' && argument !== '--require-clean' && argument !== '--')
@@ -31,7 +36,6 @@ if (shouldPublish) {
   const projectManifest = JSON.parse(await readFile(join(projectDirectory, 'package.json'), 'utf8'))
   resolvedPublishArguments = resolveReleasePublishArguments(projectManifest.version, publishArguments)
 }
-const temporaryDirectory = await mkdtemp(join(tmpdir(), 'poki-cli-package-'))
 
 function run (command, args, cwd) {
   const result = spawnSync(command, args, {
@@ -39,14 +43,21 @@ function run (command, args, cwd) {
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024
   })
+  if (result.error !== undefined) {
+    throw new Error(`${command} could not be started.`, { cause: result.error })
+  }
   if (result.status !== 0) {
     throw new Error([
       `${command} ${args.join(' ')} failed with exit code ${String(result.status)}.`,
-      result.stdout.trim(),
-      result.stderr.trim()
+      result.stdout?.trim(),
+      result.stderr?.trim()
     ].filter(Boolean).join('\n'))
   }
-  return result.stdout
+  return result.stdout ?? ''
+}
+
+function runNpm (args, cwd) {
+  return run(npmCommand, [...npmArgumentPrefix, ...args], cwd)
 }
 
 function parsePackResult (output) {
@@ -60,7 +71,7 @@ function runPublish (archive, args) {
   // The archive has already run prepack in the clean index checkout and has
   // passed every package-install check below. Publish those exact bytes and do
   // not give npm a chance to rebuild a different archive from the worktree.
-  const result = spawnSync(npm, ['publish', archive, ...args, '--ignore-scripts'], {
+  const result = spawnSync(npmCommand, [...npmArgumentPrefix, 'publish', archive, ...args, '--ignore-scripts'], {
     cwd: projectDirectory,
     stdio: 'inherit'
   })
@@ -74,14 +85,20 @@ function runPublish (archive, args) {
   }
 }
 
-try {
-  if (process.argv.includes('--require-clean')) {
-    const unstaged = run('git', ['diff', '--name-only', '--no-ext-diff'], projectDirectory).trim()
-    const untracked = run('git', ['ls-files', '--others', '--exclude-standard'], projectDirectory).trim()
-    assert.equal(unstaged, '', 'release package verification requires every tracked working-tree change to be in the active Git index')
-    assert.equal(untracked, '', 'release package verification requires every non-ignored file to be in the active Git index')
-  }
+if (process.argv.includes('--require-clean')) {
+  const unstaged = run('git', ['diff', '--name-only', '--no-ext-diff'], projectDirectory).trim()
+  const untracked = run('git', ['ls-files', '--others', '--exclude-standard'], projectDirectory).trim()
+  assert.equal(unstaged, '', 'release package verification requires every tracked working-tree change to be in the active Git index')
+  assert.equal(untracked, '', 'release package verification requires every non-ignored file to be in the active Git index')
+}
 
+// Keep the index checkout below the project so build tools resolve the real
+// parent node_modules directory. A Windows junction here makes TypeScript's
+// filesystem watcher observe canonical paths outside the watched junction and
+// abort Node 24 inside libuv before Rollup can finish the prepack build.
+const temporaryDirectory = await mkdtemp(join(projectDirectory, '.poki-cli-package-'))
+
+try {
   // Build exactly what is in the index. Reading paths from the index and bytes
   // from the worktree would let unstaged edits (or untracked files) make a
   // package check pass even though they are absent from the reviewed index.
@@ -93,16 +110,9 @@ try {
     `--prefix=${temporaryDirectory}${sep}`
   ], projectDirectory)
 
-  await symlink(
-    join(projectDirectory, 'node_modules'),
-    join(temporaryDirectory, 'node_modules'),
-    process.platform === 'win32' ? 'junction' : 'dir'
-  )
-
   const packDirectory = join(temporaryDirectory, 'packed')
   await mkdir(packDirectory)
-  const packResult = parsePackResult(run(
-    process.platform === 'win32' ? 'npm.cmd' : 'npm',
+  const packResult = parsePackResult(runNpm(
     ['pack', '--ignore-scripts=false', '--json', '--pack-destination', packDirectory],
     temporaryDirectory
   ))
@@ -116,7 +126,7 @@ try {
 
   const installDirectory = join(temporaryDirectory, 'installed')
   await mkdir(installDirectory)
-  run(npm, [
+  runNpm([
     'install',
     '--ignore-scripts',
     '--no-audit',
