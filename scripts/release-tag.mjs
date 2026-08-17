@@ -1,3 +1,5 @@
+import semver from 'semver'
+
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const SAFE_DIST_TAG = /^[a-z][a-z0-9._-]*$/
 
@@ -30,6 +32,23 @@ function explicitPublishTags (arguments_) {
   return tags
 }
 
+function explicitDryRun (arguments_) {
+  const values = []
+  for (const argument of arguments_) {
+    if (argument === '--dry-run') values.push(true)
+    if (argument === '--no-dry-run') values.push(false)
+    if (argument.startsWith('--dry-run=')) {
+      const value = argument.slice('--dry-run='.length)
+      if (value !== 'true' && value !== 'false') {
+        throw new Error('--dry-run accepts only true or false.')
+      }
+      values.push(value === 'true')
+    }
+  }
+  if (values.length > 1) throw new Error('Release publication accepts exactly one --dry-run option.')
+  return { explicit: values.length === 1, enabled: values[0] ?? false }
+}
+
 export function validatePublishTag (version, publishArguments) {
   const prerelease = prereleaseVersion(version)
   const tags = explicitPublishTags(publishArguments)
@@ -38,6 +57,9 @@ export function validatePublishTag (version, publishArguments) {
   const tag = tags[0]
   if (tag !== undefined && !SAFE_DIST_TAG.test(tag)) {
     throw new Error(`Invalid npm dist-tag '${tag}'; use a lowercase tag beginning with a letter and containing only letters, digits, dot, underscore, or hyphen.`)
+  }
+  if (tag !== undefined && semver.validRange(tag) !== null) {
+    throw new Error(`Invalid npm dist-tag '${tag}'; npm dist-tags cannot be valid semantic-version ranges. Use a channel name such as 'experimental'.`)
   }
   if (prerelease && tag === undefined) {
     throw new Error('A prerelease package version requires one explicit non-latest --tag.')
@@ -51,11 +73,22 @@ export function validatePublishTag (version, publishArguments) {
 
 export function resolveReleasePublishArguments (version, publishArguments) {
   const tag = validatePublishTag(version, publishArguments)
+  const dryRun = explicitDryRun(publishArguments)
+
+  const resolved = [...publishArguments]
+  // A Git tag is published only after a real npm publication. Own npm's
+  // dry-run value so ambient npm configuration cannot make those two effects
+  // disagree.
+  if (!dryRun.explicit) resolved.push('--dry-run=false')
 
   // npm otherwise inherits `tag` from user, project, or environment config.
   // Own the stable default on the command line so those ambient settings cannot
   // silently publish a stable release under a non-latest dist-tag.
   return tag === undefined
-    ? [...publishArguments, '--tag', 'latest']
-    : [...publishArguments]
+    ? [...resolved, '--tag', 'latest']
+    : resolved
+}
+
+export function releasePublishIsDryRun (publishArguments) {
+  return explicitDryRun(publishArguments).enabled
 }

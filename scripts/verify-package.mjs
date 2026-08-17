@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { isBuiltin } from 'node:module'
 
-import { resolveReleasePublishArguments } from './release-tag.mjs'
+import { prepareReleaseGitTag, publishReleaseGitTag } from './release-git-tag.mjs'
+import { releasePublishIsDryRun, resolveReleasePublishArguments } from './release-tag.mjs'
 
 const projectDirectory = fileURLToPath(new URL('..', import.meta.url))
 // Windows command scripts require a shell and newer Node releases reject
@@ -21,6 +22,8 @@ const arguments_ = process.argv.slice(2)
 const shouldPublish = arguments_.includes('--publish')
 const publishArguments = arguments_.filter(argument => argument !== '--publish' && argument !== '--require-clean' && argument !== '--')
 let resolvedPublishArguments = publishArguments
+let projectManifest
+let gitTagPlan
 
 assert.equal(
   shouldPublish || publishArguments.length === 0,
@@ -33,7 +36,7 @@ assert.equal(
   'release publication owns npm lifecycle execution; do not pass an ignore-scripts option'
 )
 if (shouldPublish) {
-  const projectManifest = JSON.parse(await readFile(join(projectDirectory, 'package.json'), 'utf8'))
+  projectManifest = JSON.parse(await readFile(join(projectDirectory, 'package.json'), 'utf8'))
   resolvedPublishArguments = resolveReleasePublishArguments(projectManifest.version, publishArguments)
 }
 
@@ -90,6 +93,10 @@ if (process.argv.includes('--require-clean')) {
   const untracked = run('git', ['ls-files', '--others', '--exclude-standard'], projectDirectory).trim()
   assert.equal(unstaged, '', 'release package verification requires every tracked working-tree change to be in the active Git index')
   assert.equal(untracked, '', 'release package verification requires every non-ignored file to be in the active Git index')
+}
+
+if (shouldPublish && !releasePublishIsDryRun(resolvedPublishArguments)) {
+  gitTagPlan = prepareReleaseGitTag(projectDirectory, projectManifest.version)
 }
 
 // Keep the index checkout below the project so build tools resolve the real
@@ -218,6 +225,7 @@ try {
 
   if (shouldPublish) {
     runPublish(join(packDirectory, packResult[0].filename), resolvedPublishArguments)
+    if (gitTagPlan !== undefined) publishReleaseGitTag(gitTagPlan)
   }
 } finally {
   await rm(temporaryDirectory, { recursive: true, force: true })
