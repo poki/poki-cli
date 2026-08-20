@@ -235,7 +235,7 @@ export const tableCatalog: TableDefinition[] = [
       c('fails', 'UInt64', 'Gameplays containing at least one fail event for this category and what value.'),
       c('seen', 'UInt64', 'Gameplays containing at least one visible event for this category and what value.'),
       c('interacted', 'UInt64', 'Gameplays containing at least one interact event for this category and what value.'),
-      c('lefts', 'UInt64', 'Gameplays whose final event overall was a start for this category and what value, indicating no later event was observed.'),
+      c('lefts', 'UInt64', 'Gameplays containing a start event for this category and what value at the maximum retained event timestamp for that gameplay. A retained event with a later timestamp in any category or what prevents the count; an event at the same timestamp does not. This is inferred from the absence of later events, not an explicit leave signal.'),
       c('total_starts', 'UInt64', 'Total start event occurrences, including repeated starts within one gameplay.'),
       c('total_completes', 'UInt64', 'Total complete event occurrences, including repeats within one gameplay.'),
       c('total_fails', 'UInt64', 'Total fail event occurrences, including repeats within one gameplay.'),

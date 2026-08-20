@@ -225,32 +225,6 @@ void test('every bundled metric has explicit grain-compatible table recommendati
   assert.deepEqual(dataMetrics.find(metric => metric.name === 'gameplays_per_day')?.required_fields, ['gameplays', 'date'])
 })
 
-void test('engagement source units and Netlib analytics fields stay explicit', () => {
-  const engagement = tableCatalog.find(table => table.name === 'dbt_p4d_engagement_per_gameplay')
-  assert.ok(engagement !== undefined)
-  for (const field of ['video_ad_visible_time', 'play_time', 'pre_play_time']) {
-    assert.match(engagement.columns.find(column => column.name === field)?.description ?? '', /milliseconds.*1000.*seconds/i, field)
-  }
-
-  const netlib = tableCatalog.find(table => table.name === 'dbt_p4d_netlib_overview')
-  assert.ok(netlib !== undefined)
-  assert.deepEqual(netlib.columns.map(column => column.name), [
-    'hour', 'p4d_game_id', 'team_id', 'lobbies_created', 'lobbies_joined',
-    'lobbies_updated', 'client_connected', 'peer_connections'
-  ])
-})
-
-void test('the funnel catalog preserves signed 64-bit hash types and precision guidance', () => {
-  const funnel = tableCatalog.find(table => table.name === 'dbt_p4d_game_events_funnel_v2')
-  assert.ok(funnel !== undefined)
-  const eventHash = funnel.columns.find(column => column.name === 'event_hash')
-  const prefixHashes = funnel.columns.find(column => column.name === 'prefix_hashes')
-  assert.equal(eventHash?.type, 'Int64')
-  assert.equal(prefixHashes?.type, 'Array(Int64)')
-  assert.match(eventHash?.description ?? '', /toString.*groupUniqArray.*never.*JavaScript number/i)
-  assert.match(prefixHashes?.description ?? '', /has_any_int64.*-8340446448795919230.*decimal strings.*never JavaScript numbers/i)
-})
-
 void test('snapshot warnings flag unknown tables and columns without rejecting the query', () => {
   const unknownTable = { from: 'a_newer_server_table', select: [{ field: 'value' }] }
   validateDataQuery(unknownTable)

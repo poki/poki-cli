@@ -4,8 +4,8 @@ import test from 'node:test'
 
 import { apiHarness, parseToon, requestBody, runCli } from './helpers'
 
-// Documentation prose is pinned at unit level in test/data.test.ts; this test
-// only checks that the CLI serves the bundled snapshot structurally.
+// Catalog invariants are checked at unit level in test/data.test.ts; this test
+// checks that the CLI serves the bundled snapshot structurally.
 void test('offline data discovery omits removed access metadata and serves the bundled snapshot', async () => {
   const tables = await runCli(['data', 'tables', '--format', 'json'])
   assert.equal(tables.code, 0, tables.stderr)
