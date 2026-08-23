@@ -8,12 +8,12 @@ The [Poki for Developers](https://developers.poki.com/) CLI is designed primaril
 
 ## Install
 
-Node.js 20.7 or newer is required. Choose one persistent [npm installation mode](https://docs.npmjs.com/cli/install/).
+Node.js 20.7 or newer is required. This preview is published on npm's opt-in `experimental` channel; an unqualified `@poki/cli` install follows the stable `latest` channel instead. Choose one persistent [npm installation mode](https://docs.npmjs.com/cli/install/).
 
 Install globally when the CLI should be available to the current user in every project:
 
 ```sh
-npm install --global --ignore-scripts @poki/cli
+npm install --global --ignore-scripts @poki/cli@experimental
 poki --version
 ```
 
@@ -22,18 +22,18 @@ Invoke this installation as `poki`.
 Install as a project-local development dependency when the project should pin and share its CLI version:
 
 ```sh
-npm install --save-dev --ignore-scripts @poki/cli
-npx @poki/cli --version
+npm install --save-dev --ignore-scripts @poki/cli@experimental
+npx @poki/cli@experimental --version
 ```
 
-Invoke this installation as `npx @poki/cli`. Installing or updating this mode modifies the project's `package.json` and npm lockfile, so review and commit those changes with the project.
+Invoke this installation as `npx @poki/cli@experimental`. Installing or updating this mode modifies the project's `package.json` and npm lockfile, so review and commit those changes with the project.
 
 ## Configure the project
 
 From the game project directory, run:
 
 ```sh
-npx @poki/cli init --game GAME_ID --build-dir dist
+npx @poki/cli@experimental init --game GAME_ID --build-dir dist
 ```
 
 `GAME_ID` is the game ID shown on its Poki for Developers page. `build-dir` is the directory containing the built game. This creates `poki.json`:
@@ -65,7 +65,7 @@ When both exist, `poki.json` takes precedence. Run the CLI from the configured p
 Authenticate explicitly once:
 
 ```sh
-npx @poki/cli auth login
+npx @poki/cli@experimental auth login
 ```
 
 This opens the Poki sign-in flow in a browser and saves OAuth credentials locally. Normal API and analytics commands never open a browser automatically. The only exception is the deprecated legacy `upload` command, which preserves its pre-existing implicit browser-login behavior for backwards compatibility.
@@ -87,7 +87,7 @@ No other command, option, normalized response shape, or workflow has a future cr
 After setup, the LLM should start by running:
 
 ```sh
-npx @poki/cli
+npx @poki/cli@experimental
 ```
 
 The resulting structured help explains how to discover and use every supported command. This README intentionally does not duplicate that LLM-facing documentation.
@@ -125,7 +125,7 @@ npm install --global --ignore-scripts --no-audit --no-fund @poki/cli@AVAILABLE_V
 npm install --save-dev --ignore-scripts --no-audit --no-fund @poki/cli@AVAILABLE_VERSION
 ```
 
-The LLM should choose the command matching the installation mode, verify it with `poki --version` or `npx @poki/cli --version`, and must not replay the command that already completed. The advisory never self-updates the CLI, never blocks the completed command, and follows only npm's stable `latest` tag. Help, version, auth, offline commands, ordinary dry-runs, analytics validation, and the deprecated legacy upload path do not perform the update lookup. Set `POKI_CLI_UPDATE_CHECK=0` to opt out. Run `poki help updates` for the complete machine-readable contract.
+The LLM should choose the command matching the installation mode, verify it with `poki --version` or `npx @poki/cli@AVAILABLE_VERSION --version`, and must not replay the command that already completed. The advisory never self-updates the CLI, never blocks the completed command, and follows only npm's stable `latest` tag. Help, version, auth, offline commands, ordinary dry-runs, analytics validation, and the deprecated legacy upload path do not perform the update lookup. Set `POKI_CLI_UPDATE_CHECK=0` to opt out. Run `poki help updates` for the complete machine-readable contract.
 
 ## License
 
