@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync,
 import { join } from 'path'
 
 import { getConfigDir, Config } from './config'
-import { authRequired } from './errors'
+import { authRequired, AUTH_LOGIN_USER_ACTION_HINT } from './errors'
 import { serviceEnvironment } from './service-environment'
 import { DEFAULT_REQUEST_TIMEOUT_MS, timeoutMillisecondsOrDefault } from './timeouts'
 import { CLI_USER_AGENT } from './version'
@@ -420,7 +420,7 @@ export async function login (log: Log = console.error): Promise<Config> {
   if (!(process.stdin.isTTY ?? false) && !(process.stderr.isTTY ?? false)) {
     throw authRequired(
       'Sign-in needs an interactive terminal to open a browser and complete the OAuth flow.',
-      'Run `poki auth login` from an interactive terminal.'
+      AUTH_LOGIN_USER_ACTION_HINT
     )
   }
   return await interactiveLogin(log)

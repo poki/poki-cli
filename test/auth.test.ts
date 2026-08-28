@@ -6,7 +6,7 @@ import test, { TestContext } from 'node:test'
 
 import { launchBrowser, login, refreshStoredAuth } from '../src/auth'
 import { getConfigDir } from '../src/config'
-import { CliError } from '../src/errors'
+import { AUTH_LOGIN_USER_ACTION_HINT, AUTH_REQUIRED_HINT, CliError } from '../src/errors'
 import { CLI_USER_AGENT } from '../src/version'
 import { configHomeEnvironment, configHomeEnvironmentVariable, pokiConfigDirectory, runCli, temporaryDirectory } from './helpers'
 
@@ -31,6 +31,25 @@ function fabricatedJwt (claims: Record<string, unknown>): string {
   const part = (value: Record<string, unknown>): string => Buffer.from(JSON.stringify(value)).toString('base64url')
   return `${part({ alg: 'HS256', typ: 'JWT' })}.${part(claims)}.fabricated-signature`
 }
+
+void test('missing credentials tell the agent to ask the user to complete browser sign-in', async t => {
+  const directory = temporaryDirectory(t, 'auth-missing')
+  const result = await runCli(['games', 'list', '--format', 'json'], {
+    env: configHomeEnvironment(directory)
+  })
+
+  assert.equal(result.code, 3, result.stderr)
+  assert.equal(result.stdout, '')
+  assert.deepEqual(JSON.parse(result.stderr), {
+    error: {
+      code: 'AUTH_REQUIRED',
+      message: 'Authentication is required.',
+      status: 401,
+      retryable: false,
+      hint: AUTH_REQUIRED_HINT
+    }
+  })
+})
 
 // Points refreshStoredAuth at a temporary directory and a local auth server
 // for the duration of one test, restoring the environment afterwards.
@@ -86,7 +105,7 @@ void test('unusable credentials fail without opening a browser and upload tokens
       message: 'Authentication is required.',
       status: 401,
       retryable: false,
-      hint: 'Run `poki auth login` (opens a browser and needs a human to complete sign-in).'
+      hint: AUTH_REQUIRED_HINT
     }
   })
 })
@@ -533,5 +552,5 @@ void test('login reads interactivity from stdin and stderr, not from the structu
   process.stdin.isTTY = false
   await assert.rejects(login(() => {}), (error: unknown) => error instanceof CliError &&
     error.code === 'AUTH_REQUIRED' &&
-    error.hint === 'Run `poki auth login` from an interactive terminal.')
+    error.hint === AUTH_LOGIN_USER_ACTION_HINT)
 })
