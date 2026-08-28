@@ -4,6 +4,9 @@ const safeApiErrorFields = ['status', 'code', 'title', 'detail'] as const
 export type SafeApiError = Partial<Record<typeof safeApiErrorFields[number], string>>
 export interface SafeApiErrorResponse extends Record<string, unknown> { errors?: SafeApiError[] }
 
+export const AUTH_LOGIN_USER_ACTION_HINT = 'Ask the user to run `poki auth login` in an interactive terminal and complete the browser sign-in. Do not run `poki auth login` yourself.'
+export const AUTH_REQUIRED_HINT = `${AUTH_LOGIN_USER_ACTION_HINT} After the user confirms sign-in succeeded, retry the original command.`
+
 /**
  * Project a backend JSON:API error document onto the reviewed developer
  * surface. Error source pointers, per-error metadata, document metadata, and
@@ -63,7 +66,7 @@ export function inputError (message: string, details?: ErrorDetails, hint?: stri
   return new CliError('INVALID_INPUT', message, 2, { details, hint })
 }
 
-export function authRequired (message = 'Authentication is required.', hint = 'Run `poki auth login` (opens a browser and needs a human to complete sign-in).'): CliError {
+export function authRequired (message = 'Authentication is required.', hint = AUTH_REQUIRED_HINT): CliError {
   return new CliError('AUTH_REQUIRED', message, 3, {
     status: 401,
     hint

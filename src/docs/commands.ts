@@ -169,7 +169,7 @@ const jsonApiOutput = {
 const standardExitCodes = {
   0: 'success or help',
   2: 'invalid input or local validation failure',
-  3: 'authentication required or rejected; recovery needs a human to run poki auth login in a browser-capable terminal',
+  3: 'authentication required or rejected; ask the user to run poki auth login in an interactive terminal and complete the browser sign-in; the agent must not run it',
   4: 'authenticated API request denied by permission or another client-visible rule, or resource not found',
   5: 'network, timeout, server, or invalid API response failure',
   // 128 + SIGINT, the POSIX convention for a signal-terminated process.
@@ -694,7 +694,7 @@ export function shapesDocument (): Record<string, unknown> {
       codes: [
         'MISSING_INPUT (exit 2): details.help embeds the full command contract; self-correct from it.',
         'INVALID_INPUT (exit 2): local validation; unknown commands embed details.suggestions and details.available_commands.',
-        'AUTH_REQUIRED (exit 3): a human must run poki auth login.',
+        'AUTH_REQUIRED (exit 3): ask the user to run poki auth login in an interactive terminal and complete the browser sign-in; do not run the login command yourself; retry the original command only after the user confirms success.',
         'PERMISSION_DENIED (exit 4, status 403): the backend explicitly identified an ACL failure; details includes the command’s documented permission requirements and an allowlisted API error summary containing only status, code, title, and detail.',
         'NOT_FOUND (exit 4): the resource does not exist in the scanned scope.',
         'ACTIVE_VERSION_MULTIPLE_TRACKS (exit 4, status 409): versions activate found more than one existing traffic track during its GET preflight and sent no PATCH.',

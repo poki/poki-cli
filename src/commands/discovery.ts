@@ -2,6 +2,7 @@ import type { Argv } from 'yargs'
 
 import { ApiClient } from '../api'
 import { getAuthStatus } from '../auth'
+import { AUTH_LOGIN_USER_ACTION_HINT } from '../errors'
 import { readProjectConfigContext } from '../project'
 import { CLI_VERSION } from '../version'
 import { getResource, render, withFormatOption, withOutputOptions } from './common'
@@ -16,7 +17,7 @@ export function registerDiscoveryCommands (yargs: Argv, api: ApiClient): Argv {
         hints.push('No project game configured. Run `poki init --game GAME_ID` here, or pass --game to game-scoped commands.')
       }
       if (!auth.authenticated) {
-        hints.push('Not authenticated. Run `poki auth login` (opens a browser and needs a human to complete sign-in).')
+        hints.push(`Not authenticated. ${AUTH_LOGIN_USER_ACTION_HINT}`)
       }
       render({
         project: {

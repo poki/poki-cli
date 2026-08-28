@@ -1,6 +1,6 @@
 import { decodeBearerCredentials, readStoredAuth, refreshStoredAuth } from './auth'
 import { Config } from './config'
-import { authRequired, CliError, safeApiErrorResponse } from './errors'
+import { authRequired, AUTH_REQUIRED_HINT, CliError, safeApiErrorResponse } from './errors'
 import { serviceEnvironment } from './service-environment'
 import { DEFAULT_DOWNLOAD_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS, DEFAULT_UPLOAD_TIMEOUT_MS, timeoutMillisecondsOrDefault } from './timeouts'
 import { CLI_USER_AGENT } from './version'
@@ -65,7 +65,7 @@ export function apiResponseError (status: number, body: unknown, headers: Header
     requestId: headers.get('x-request-id') ?? headers.get('x-cloud-trace-context') ?? undefined,
     retryAfter: headers.get('retry-after') ?? undefined,
     ...(status === 401
-      ? { hint: 'Run `poki auth login` (opens a browser and needs a human to complete sign-in).' }
+      ? { hint: AUTH_REQUIRED_HINT }
       : (transient || redirect) && !retrySafe
           ? { hint: `The ${method} outcome may be unknown. Read the resource state before deciding whether to retry this mutation.` }
           : {})
