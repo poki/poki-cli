@@ -25,3 +25,5 @@ jobs:
       run: yarn --frozen-lockfile
     - name: Validate
       run: yarn validate
+      env:
+        NODE_OPTIONS: --test-reporter=./scripts/failures-only-reporter.mjs
