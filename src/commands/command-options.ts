@@ -53,8 +53,8 @@ export function applySpecOption (yargs: Argv, spec: HelpOption, declaration: Opt
 
 // --game shares nothing but its name with the spec: every caller supplies its
 // own description, and requiredness and default are resolved from the project
-// configuration at registration time. The historical legacy-upload quirk rides
-// on that resolution, so it stays declared here rather than generated.
+// configuration at registration time. The deprecated upload command declares
+// the same default-or-required behavior independently on its compatibility path.
 export function withDefaultGameOption (
   yargs: Argv,
   projectGameId: string | undefined,

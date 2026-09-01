@@ -170,6 +170,9 @@ export async function legacyHumanUpload (
 
 export function registerLegacyCommands (yargs: Argv): Argv {
   const config = readLegacyProjectConfig()
+  const projectGameId = typeof config.game_id === 'string' && config.game_id.trim() !== ''
+    ? config.game_id
+    : undefined
   const filename = uploadFilename()
 
   return yargs
@@ -208,8 +211,8 @@ export function registerLegacyCommands (yargs: Argv): Argv {
       .option('game', {
         alias: 'g',
         describe: 'Poki for Developers game ID',
-        demandOption: config.game_id !== undefined,
-        default: config.game_id,
+        demandOption: projectGameId === undefined,
+        ...(projectGameId === undefined ? {} : { default: projectGameId }),
         type: 'string'
       })
       .option('build-dir', {
@@ -240,6 +243,15 @@ export function registerLegacyCommands (yargs: Argv): Argv {
         describe: 'Disable image compression',
         default: false,
         type: 'boolean'
+      })
+      .check(argv => {
+        if (typeof argv.game !== 'string' || argv.game.trim() === '') {
+          throw new CliError('INVALID_INPUT', 'A game ID is required and no project game_id is configured.', 2, {
+            details: { option: '--game' },
+            hint: 'Pass --game GAME_ID, or run `poki init --game GAME_ID` to configure this directory. `poki games list` shows visible game IDs.'
+          })
+        }
+        return true
       }), async argv => {
       // The historical entry point logged every failure and still completed
       // successfully, which made a failed upload indistinguishable from a
@@ -247,7 +259,7 @@ export function registerLegacyCommands (yargs: Argv): Argv {
       // like every other command's and carry a documented exit code; the human
       // detail legacyHumanUpload writes to stderr is unchanged.
       await legacyHumanUpload(
-        argv.game as string,
+        String(argv.game).trim(),
         argv.buildDir,
         filename,
         argv.name,

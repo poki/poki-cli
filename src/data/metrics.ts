@@ -7,6 +7,7 @@ export interface DataMetric {
   population: string
   aggregation_kind: 'sum' | 'ratio_of_sums' | 'row_level'
   aggregation_guidance: string
+  required_dimensions: string[]
   supported_tables: string[]
   formula: Record<string, unknown>
   required_fields: string[]
@@ -32,7 +33,9 @@ const ads = formula('+', [
 // directly usable inside a select statement, as `data metric` documents.
 const days = { aggregate: 'count', distinct: true, field: 'date', alias: 'days' }
 
-const metricDefinitions: Array<Omit<DataMetric, 'required_fields'>> = [
+type MetricDefinition = Omit<DataMetric, 'required_fields' | 'required_dimensions'> & { required_dimensions?: string[] }
+
+const metricDefinitions: MetricDefinition[] = [
   {
     name: 'conversion_to_play',
     description: 'Share of daily active users who reached gameplay.',
@@ -40,6 +43,7 @@ const metricDefinitions: Array<Omit<DataMetric, 'required_fields'>> = [
     population: 'Daily active users, with daily playing users as the numerator subset.',
     aggregation_kind: 'ratio_of_sums',
     aggregation_guidance: 'Use a ratio of sums over compatible rows; do not average row-level conversion ratios.',
+    required_dimensions: ['date', 'p4d_game_id'],
     supported_tables: ['dbt_p4d_users', 'dbt_p4d_monetization', 'dbt_p4d_games_overview'],
     formula: formula('/', [sum('daily_playing_users'), sum('daily_active_users')])
   },
@@ -91,6 +95,7 @@ const metricDefinitions: Array<Omit<DataMetric, 'required_fields'>> = [
     population: 'Daily active users and all represented time in the game overview model.',
     aggregation_kind: 'ratio_of_sums',
     aggregation_guidance: 'Use a ratio of summed time to summed daily active users; do not average per-row ratios.',
+    required_dimensions: ['date', 'p4d_game_id'],
     supported_tables: ['dbt_p4d_games_overview'],
     formula: formula('/', [{ formula: timeSpent }, sum('daily_active_users')])
   },
@@ -111,6 +116,7 @@ const metricDefinitions: Array<Omit<DataMetric, 'required_fields'>> = [
     population: 'Daily active users and ad impressions represented by the selected monetization or game-overview rows.',
     aggregation_kind: 'ratio_of_sums',
     aggregation_guidance: 'Use a ratio of summed impressions to summed daily active users; do not average per-row ratios.',
+    required_dimensions: ['date', 'p4d_game_id'],
     supported_tables: ['dbt_p4d_monetization', 'dbt_p4d_games_overview'],
     formula: formula('/', [{ formula: ads }, sum('daily_active_users')])
   },
@@ -141,7 +147,8 @@ const metricDefinitions: Array<Omit<DataMetric, 'required_fields'>> = [
     unit: 'connected peer pairs',
     population: 'Distinct connected Netlib peer identifiers represented by the selected hourly rows.',
     aggregation_kind: 'sum',
-    aggregation_guidance: 'Sum peer_connections over compatible hourly rows, then divide once by 2 because each peer-to-peer connection is represented by both peers.',
+    aggregation_guidance: 'Within one visible or exactly filtered hour and game, sum compatible audience rows and divide once by 2 because each peer-to-peer connection is represented by both peers.',
+    required_dimensions: ['hour', 'p4d_game_id'],
     supported_tables: ['dbt_p4d_netlib_overview'],
     formula: formula('/', [sum('peer_connections'), constant(2)])
   },
@@ -152,6 +159,7 @@ const metricDefinitions: Array<Omit<DataMetric, 'required_fields'>> = [
     population: 'Eligible gameplay sequences represented by one custom-event funnel row.',
     aggregation_kind: 'row_level',
     aggregation_guidance: 'Evaluate at the funnel row grain; do not sum prefix rows as unique gameplays.',
+    required_dimensions: ['prefix_len'],
     supported_tables: ['dbt_p4d_game_events_funnel_v2'],
     formula: formula('/', [{ field: 'gameplay_sample_percentage' }, constant(100)])
   },
@@ -162,6 +170,7 @@ const metricDefinitions: Array<Omit<DataMetric, 'required_fields'>> = [
     population: 'Eligible gameplay sequences represented by one custom-event funnel row.',
     aggregation_kind: 'row_level',
     aggregation_guidance: 'Estimate at a compatible funnel grouping; do not sum overlapping prefix rows as unique gameplay totals.',
+    required_dimensions: ['prefix_len'],
     supported_tables: ['dbt_p4d_game_events_funnel_v2'],
     formula: formula('/', [{ field: 'gameplays' }, { formula: formula('/', [{ field: 'gameplay_sample_percentage' }, constant(100)]) }])
   },
@@ -192,7 +201,11 @@ export const dataMetrics: DataMetric[] = metricDefinitions.map(definition => {
   visitSelectExpression({ formula: definition.formula }, {
     field: field => requiredFields.add(field)
   })
-  return { ...definition, required_fields: [...requiredFields] }
+  return {
+    ...definition,
+    required_dimensions: definition.required_dimensions ?? [],
+    required_fields: [...requiredFields]
+  }
 })
 
 export function findMetric (name: string): DataMetric | undefined {

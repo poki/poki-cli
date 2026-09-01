@@ -2,10 +2,12 @@ import type { Argv } from 'yargs'
 
 import { ApiClient } from '../api'
 import { requestTimeout, withFormatOption, withTimeoutOption } from './common'
-import { findTable, snapshotWarnings, tableCatalog } from '../data/catalog'
+import { findTable, SEMANTIC_CONTRACT_VERSION, tableCatalog, type AggregationKind, type ColumnDefinition, type TableDefinition } from '../data/catalog'
 import { dataRecipes, fillRecipe, findRecipe, recipeNamesForTable, recipeParameterNames, recipePlaceholders, type DataRecipe } from '../data/examples'
-import { describeQueryTopic, includeResourceTypes, joinPolicy, queryTopics, resolvedSelectOutputName, validateDataQuery } from '../data/grammar'
+import { describeQueryTopic, includeResourceTypes, joinPolicy, queryDescription, queryTopics, resolvedSelectOutputName, validateDataQuery } from '../data/grammar'
 import { dataMetrics, findMetric } from '../data/metrics'
+import { visitSelectExpression } from '../data/select-expression'
+import { validateDataQuerySemantics } from '../data/semantics'
 import { CliError, inputError } from '../errors'
 import { readStructuredSource } from '../input'
 import { isRecord } from '../json'
@@ -16,6 +18,7 @@ import { ANALYTICS_TIME_ZONE } from '../timezones'
 
 const provenance = {
   time_zone: ANALYTICS_TIME_ZONE,
+  semantic_contract_version: SEMANTIC_CONTRACT_VERSION,
   documentation: {
     bundled: true,
     external_sources_required: false,
@@ -26,7 +29,8 @@ const provenance = {
     metrics: 'poki data metrics; poki data metric NAME',
     recipes: 'poki data recipes; poki data recipe NAME'
   },
-  api_authority: 'The bundled snapshot is informative; the deployed API remains authoritative for permissions, validation, and newer schema fields.'
+  cli_schema_authority: 'The bundled catalog is the authoritative table, join, field, and aggregation contract for this CLI. Unbundled references are rejected until a CLI update adds their contracts.',
+  api_authority: 'The deployed API remains authoritative for permissions and final execution of queries that pass the bundled CLI contract.'
 }
 
 function withDataRequestOptions (yargs: Argv): Argv {
@@ -47,29 +51,41 @@ function withDataRequestOptions (yargs: Argv): Argv {
     })
 }
 
-function columnIndex (column: { name: string, type: string, description: string }): {
+function columnIndex (column: ColumnDefinition): {
   name: string
   type: string
   nullable: boolean
   summary: string
+  aggregation: ColumnDefinition['aggregation']
+  enum_values?: string[]
+  frontend_name?: string
 } {
   const nullable = column.type.startsWith('Nullable(') && column.type.endsWith(')')
   return {
     name: column.name,
     type: nullable ? column.type.slice('Nullable('.length, -1) : column.type,
     nullable,
-    summary: column.description
+    summary: column.description,
+    aggregation: column.aggregation,
+    ...(column.enum_values === undefined ? {} : { enum_values: column.enum_values }),
+    ...(column.frontend_name === undefined ? {} : { frontend_name: column.frontend_name })
   }
 }
 
 // Curated recommendations are declared by each metric instead of inferred
 // from matching column names: identically named measures can have incompatible
 // populations or grains (custom-event rows are the canonical example).
-function metricTableRecommendations (names: string[]): Array<Record<string, unknown>> {
+function metricTableRecommendations (names: string[], requiredDimensions: string[] = []): Array<Record<string, unknown>> {
   return names.map(name => {
     const table = findTable(name)
     if (table === undefined) throw new Error(`Metric references unknown bundled table '${name}'.`)
-    return { name: table.name, grain: table.grain, population: table.population }
+    return {
+      name: table.name,
+      grain: table.grain,
+      grain_fields: table.grain_fields,
+      population: table.population,
+      required_dimensions: requiredDimensions
+    }
   })
 }
 
@@ -140,8 +156,118 @@ function freshnessOutputColumn (query: Record<string, unknown>): string | undefi
   return resolvedSelectOutputName(statement)
 }
 
-function structuredSnapshotWarnings (query: Record<string, unknown>): Array<{ code: string, message: string, blocking: boolean }> {
-  return snapshotWarnings(query).map(message => ({ code: 'BUNDLED_SNAPSHOT_MISMATCH', message, blocking: false }))
+const measureAggregationKinds = new Set<AggregationKind>([
+  'additive_measure',
+  'distinct_count',
+  'repeated_measure',
+  'row_ratio',
+  'window_total'
+])
+
+const measureWarningCodes: Partial<Record<AggregationKind, string>> = {
+  distinct_count: 'DISTINCT_COUNT_GRAIN',
+  repeated_measure: 'REPEATED_MEASURE_GRAIN',
+  row_ratio: 'ROW_RATIO_GRAIN',
+  window_total: 'WINDOW_TOTAL_OVERLAP'
+}
+
+function resolveCatalogColumn (from: TableDefinition, reference: string): { table: TableDefinition, column: ColumnDefinition } | undefined {
+  const separator = reference.indexOf('.')
+  const table = separator === -1 ? from : findTable(reference.slice(0, separator))
+  if (table === undefined) return undefined
+  const field = separator === -1 ? reference : reference.slice(separator + 1)
+  const column = table.columns.find(candidate => candidate.name === field)
+  return column === undefined ? undefined : { table, column }
+}
+
+function resultInterpretation (query: Record<string, unknown>): Record<string, unknown> {
+  const source = typeof query.from === 'string' ? findTable(query.from) : undefined
+  // Execution reaches this helper only after structural, reference, and
+  // semantic validation. Keep the fallback shape explicit nevertheless so a
+  // future caller cannot accidentally turn missing catalog data into a crash.
+  if (source === undefined) {
+    return {
+      source_contract: null,
+      selected_measure_contracts: [],
+      notes: [],
+      warnings: []
+    }
+  }
+
+  const selectedMeasureContracts: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+  const addMeasure = (reference: string, output: string): void => {
+    const resolved = resolveCatalogColumn(source, reference)
+    if (resolved === undefined || !measureAggregationKinds.has(resolved.column.aggregation.kind)) return
+    const key = `${output}\u0000${resolved.table.name}\u0000${resolved.column.name}`
+    if (seen.has(key)) return
+    seen.add(key)
+    selectedMeasureContracts.push({
+      output,
+      source: { table: resolved.table.name, field: resolved.column.name },
+      description: resolved.column.description,
+      aggregation: resolved.column.aggregation
+    })
+  }
+
+  if (Array.isArray(query.select)) {
+    query.select.forEach((statement, index) => {
+      if (typeof statement === 'string') {
+        addMeasure(statement, statement.slice(statement.lastIndexOf('.') + 1))
+        return
+      }
+      if (!isRecord(statement)) return
+      const output = resolvedSelectOutputName(statement)
+      if (output === undefined) return
+      visitSelectExpression(statement, {
+        field: (field, context) => {
+          // Conditions constrain an output but do not contribute a selected
+          // value. Weight and argMax value fields do contribute and remain.
+          if (!context.inCondition) addMeasure(field, output)
+        }
+      }, { path: `select[${String(index)}]` })
+    })
+  }
+
+  const notes: Array<{ code: string, message: string }> = []
+  if (source.name === 'dbt_p4d_game_events_v2' || source.name === 'dbt_p4d_game_events_times_v2') {
+    notes.push({
+      code: 'GAME_EVENT_LIFECYCLE_NORMALIZATION',
+      message: queryDescription.game_events.lifecycle_normalization
+    })
+  }
+  if (source.name === 'dbt_p4d_game_events_funnel_v2') {
+    notes.push({
+      code: 'GAME_EVENT_FUNNEL_KEYS_ARE_OPAQUE',
+      message: queryDescription.game_events.funnel_keys
+    })
+  }
+
+  const warnings = selectedMeasureContracts.flatMap(contract => {
+    const aggregation = contract.aggregation as ColumnDefinition['aggregation']
+    const code = measureWarningCodes[aggregation.kind]
+    return code === undefined
+      ? []
+      : [{
+          code,
+          output: contract.output,
+          source: contract.source,
+          message: aggregation.guidance,
+          blocking: false
+        }]
+  })
+
+  return {
+    source_contract: {
+      grain: source.grain,
+      grain_fields: [...source.grain_fields],
+      population: source.population
+    },
+    ...(source.field_terminology === undefined ? {} : { field_terminology: source.field_terminology }),
+    selected_measure_contracts: selectedMeasureContracts,
+    notes,
+    warnings
+  }
 }
 
 function normalizeDataResult (body: unknown, query: Record<string, unknown>, recipeName?: string): unknown {
@@ -167,7 +293,7 @@ function normalizeDataResult (body: unknown, query: Record<string, unknown>, rec
   const hasMore = returnedRows >= limit && offset + returnedRows < totalRows
   const freshnessColumn = freshnessOutputColumn(query)
   const freshnessReturned = freshnessColumn !== undefined && header.includes(freshnessColumn) && normalizedRows.length > 0 && normalizedRows.every(row => typeof row[freshnessColumn] === 'string' && String(row[freshnessColumn]).trim() !== '')
-  const warnings: Array<{ code: string, message: string, blocking: boolean }> = structuredSnapshotWarnings(query)
+  const warnings: Array<{ code: string, message: string, blocking: boolean }> = []
   if (!freshnessReturned) {
     warnings.push({
       code: 'FRESHNESS_NOT_CHECKED',
@@ -196,6 +322,8 @@ function normalizeDataResult (body: unknown, query: Record<string, unknown>, rec
           omitted_before_offset: offset > 0
         },
         time_zone: ANALYTICS_TIME_ZONE,
+        semantic_validation: { status: 'passed', contract_version: SEMANTIC_CONTRACT_VERSION },
+        interpretation: resultInterpretation(query),
         freshness: freshnessReturned
           ? { status: 'returned_in_rows' }
           : { status: 'not_checked', command: 'poki data freshness' },
@@ -228,17 +356,20 @@ async function executeQuery (
 ): Promise<void> {
   validateDataQuery(query)
   requireResolvedQuery(query, recipeName)
+  validateDataQuerySemantics(query)
   if (argv.validateOnly === true) {
-    // Advisory snapshot cross-check: unknown tables or columns warn but never
-    // invalidate the query, because the deployed API remains authoritative.
-    const warnings = structuredSnapshotWarnings(query)
     writeStructured({
       local_structure_valid: true,
+      local_semantics_valid: true,
       api_validated: false,
       executable: 'unknown',
       query,
-      ...(warnings.length === 0 ? {} : { warnings }),
-      meta: { contacted_api: false, validation_scope: 'local_structure_only', provenance }
+      meta: {
+        contacted_api: false,
+        validation_scope: 'local_structure_and_semantics',
+        semantic_contract_version: SEMANTIC_CONTRACT_VERSION,
+        provenance
+      }
     }, structuredFormat(argv.format))
     return
   }
@@ -301,14 +432,16 @@ function withRecipeParameters (yargs: Argv, includeExecution: boolean): Argv {
     .option('game', { describe: 'GAME_ID parameter; defaults to project game_id', type: 'string' })
     .option('from-date', { describe: 'FROM_DATE in YYYY-MM-DD Europe/Amsterdam calendar time', type: 'string' })
     .option('to-date', { describe: 'TO_DATE in YYYY-MM-DD Europe/Amsterdam calendar time', type: 'string' })
-    .option('last-days', { describe: 'Fill FROM_DATE and TO_DATE with the N complete Europe/Amsterdam days ending yesterday', type: 'number' })
+    .option('last-days', { describe: 'Fill the recipe date or datetime range with the N complete Europe/Amsterdam days ending yesterday', type: 'number' })
     .option('from-datetime', { describe: 'FROM_DATETIME in YYYY-MM-DD HH:mm:ss Europe/Amsterdam local time', type: 'string' })
     .option('to-datetime', { describe: 'TO_DATETIME in YYYY-MM-DD HH:mm:ss Europe/Amsterdam local time', type: 'string' })
     .option('param', { describe: 'Additional or overriding recipe parameter in NAME=VALUE form; repeatable', type: 'array', string: true })
     .check(argv => {
       if (argv.lastDays !== undefined) {
         if (!Number.isInteger(argv.lastDays) || Number(argv.lastDays) < 1) throw inputError('--last-days must be a positive integer.')
-        if (argv.fromDate !== undefined || argv.toDate !== undefined) throw inputError('--last-days cannot be combined with --from-date or --to-date.')
+        if (argv.fromDate !== undefined || argv.toDate !== undefined || argv.fromDatetime !== undefined || argv.toDatetime !== undefined) {
+          throw inputError('--last-days cannot be combined with explicit date or datetime range options.')
+        }
       }
       return true
     })
@@ -336,11 +469,21 @@ function recipeParameters (
     if (typeof value === 'string') parameters[name] = value
   }
   if (argv.lastDays !== undefined) {
-    if (accepted.FROM_DATE === undefined || accepted.TO_DATE === undefined) {
-      throw inputError('--last-days requires a recipe with FROM_DATE and TO_DATE parameters.', { accepted_parameters: Object.keys(accepted) })
+    const acceptsDates = accepted.FROM_DATE !== undefined && accepted.TO_DATE !== undefined
+    const acceptsDateTimes = accepted.FROM_DATETIME !== undefined && accepted.TO_DATETIME !== undefined
+    if (!acceptsDates && !acceptsDateTimes) {
+      throw inputError('--last-days requires a recipe with a complete date or datetime range.', { accepted_parameters: Object.keys(accepted) })
     }
-    parameters.FROM_DATE = analyticsDate(Number(argv.lastDays))
-    parameters.TO_DATE = analyticsDate(1)
+    const fromDate = analyticsDate(Number(argv.lastDays))
+    const toDate = analyticsDate(1)
+    if (acceptsDates) {
+      parameters.FROM_DATE = fromDate
+      parameters.TO_DATE = toDate
+    }
+    if (acceptsDateTimes) {
+      parameters.FROM_DATETIME = `${fromDate} 00:00:00`
+      parameters.TO_DATETIME = `${toDate} 23:59:59`
+    }
   }
   for (const raw of Array.isArray(argv.param) ? argv.param.map(String) : []) {
     const separator = raw.indexOf('=')
@@ -414,15 +557,18 @@ export function registerDataCommands (yargs: Argv, api: ApiClient): Argv {
       writeStructured({ ...describeQueryTopic(argv.topic), provenance }, structuredFormat(argv.format))
     })
     .command('tables', 'List the existing bundled analytics table snapshot', tables => withFormatOption(tables)
-      .option('full', { describe: 'Include column counts and recipe names', type: 'boolean', default: false }), argv => {
+      .option('full', { describe: 'Include column contracts, column counts, and recipe names', type: 'boolean', default: false }), argv => {
       writeStructured({
-        data: tableCatalog.map(({ columns, ...table }) => argv.full ? { ...table, column_count: columns.length, recipes: recipeNamesForTable(table.name) } : table),
+        data: tableCatalog.map(({ columns, ...table }) => argv.full
+          ? { ...table, columns: columns.map(columnIndex), column_count: columns.length, recipes: recipeNamesForTable(table.name) }
+          : table),
         meta: {
           total: tableCatalog.length,
           top_level: tableCatalog.filter(table => table.top_level).length,
           join_only: tableCatalog.filter(table => !table.top_level).length,
           join_policy: joinPolicy,
           date_time_zone: ANALYTICS_TIME_ZONE,
+          semantic_contract_version: SEMANTIC_CONTRACT_VERSION,
           provenance
         }
       }, structuredFormat(argv.format))
@@ -441,7 +587,7 @@ export function registerDataCommands (yargs: Argv, api: ApiClient): Argv {
       const foundColumn = found.columns.find(column => column.name === argv.column)
       if (foundColumn === undefined) throw inputError(`Unknown column '${argv.column}' on table '${argv.table}'.`, { available_columns: found.columns.map(column => column.name) })
       writeStructured({
-        data: { table: found.name, table_description: found.description, top_level: found.top_level, ...(found.join_on === undefined ? {} : { join_on: found.join_on }), column: columnIndex(foundColumn), recipes: recipeNamesForTable(found.name) },
+        data: { table: found.name, table_description: found.description, top_level: found.top_level, ...(found.join_on === undefined ? {} : { join_on: found.join_on }), ...(found.field_terminology === undefined ? {} : { field_terminology: found.field_terminology }), column: columnIndex(foundColumn), recipes: recipeNamesForTable(found.name) },
         meta: { date_time_zone: ANALYTICS_TIME_ZONE, provenance }
       }, structuredFormat(argv.format))
     })
@@ -449,7 +595,7 @@ export function registerDataCommands (yargs: Argv, api: ApiClient): Argv {
       .option('full', { describe: 'Include complete formula objects and table grain recommendations', type: 'boolean', default: false }), argv => {
       writeStructured({
         data: dataMetrics.map(({ formula, ...metric }) => argv.full
-          ? { ...metric, formula, table_recommendations: metricTableRecommendations(metric.supported_tables) }
+          ? { ...metric, formula, table_recommendations: metricTableRecommendations(metric.supported_tables, metric.required_dimensions) }
           : metric),
         meta: { total: dataMetrics.length, provenance }
       }, structuredFormat(argv.format))
@@ -458,7 +604,7 @@ export function registerDataCommands (yargs: Argv, api: ApiClient): Argv {
       .positional('name', { describe: 'Metric name returned by data metrics', type: 'string', demandOption: true }), argv => {
       const found = findMetric(String(argv.name))
       if (found === undefined) throw inputError(`Unknown data metric '${String(argv.name)}'.`, { available_metrics: dataMetrics.map(metric => metric.name) })
-      writeStructured({ data: { ...found, table_recommendations: metricTableRecommendations(found.supported_tables) }, meta: { provenance } }, structuredFormat(argv.format))
+      writeStructured({ data: { ...found, table_recommendations: metricTableRecommendations(found.supported_tables, found.required_dimensions) }, meta: { provenance } }, structuredFormat(argv.format))
     })
     .command('recipes', 'List bundled analytics recipes and typed parameter requirements', recipes => withFormatOption(recipes), argv => {
       writeStructured({ data: dataRecipes.map(({ query, ...recipe }) => ({ ...recipe, placeholders: recipePlaceholders(query) })), meta: { total: dataRecipes.length, date_time_zone: ANALYTICS_TIME_ZONE, provenance } }, structuredFormat(argv.format))

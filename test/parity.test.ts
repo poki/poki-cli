@@ -186,7 +186,6 @@ const declaredDefaultExceptions = new Map<string, (declared: RecordedOption) => 
   // prose because no single value is always correct.
   ['versions upload --build-dir', declared => assert.equal(declared.default, 'dist')],
   ['upload --build-dir', declared => assert.equal(declared.default, 'dist')],
-  ['upload --game', declared => assert.equal(declared.default, PROJECT_GAME_ID)],
   // The declared default is a freshly generated timestamped archive name
   // (uploadFilename in src/legacy.ts); the spec documents it as prose.
   ['upload --name', declared => assert.match(String(declared.default), /^\d{4}-\d{2}-\d{2}-\d{6}\.zip$/)],
@@ -267,12 +266,7 @@ void test('documented options match declared yargs options exactly', () => {
       // option that documents nothing at all is a gap on either surface.
       assert.notEqual((declared.description ?? '').trim(), '', `yargs describe for ${label}`)
       assert.notEqual(documented.description.trim(), '', `documented description for ${label}`)
-      // Preserve the historical upload declaration exactly: it marks --game
-      // demanded only when the legacy project config already supplies a
-      // default. This oddity predates the new command surface.
-      if (key === 'upload' && name === 'game') {
-        assert.equal(declared.demandOption, true, `${label} must preserve the legacy configured-project declaration`)
-      } else if (documented.required === true) {
+      if (documented.required === true) {
         assert.equal(declared.demandOption, true, `${label} is documented required but not demanded by yargs`)
       } else {
         assert.equal(declared.demandOption, false, `${label} is demanded by yargs but not documented required:true`)
@@ -281,7 +275,8 @@ void test('documented options match declared yargs options exactly', () => {
       if (documented.required === CONDITIONAL_GAME_REQUIRED) {
         // With a project game configured (as in this suite) the declaration
         // must default to it and must not be demanded; without one it becomes
-        // demanded (withDefaultGameOption in src/commands/common.ts).
+        // demanded (withDefaultGameOption in src/commands/command-options.ts,
+        // with the legacy upload declaring the same behavior directly).
         assert.equal(declared.default, PROJECT_GAME_ID, `${label} must default to the configured project game`)
         continue
       }
@@ -489,13 +484,13 @@ void test('without a project game, conditionally required game options become de
   assert.ok(checked >= 20, `only ${checked} conditionally required game options were checked`)
 })
 
-void test('legacy upload keeps its historical project-dependent game declaration', () => {
+void test('legacy upload requires a game only when the project has no default', () => {
   const configured = recordedCommands.get('upload')?.options.get('game')
-  assert.equal(configured?.demandOption, true)
+  assert.equal(configured?.demandOption, false)
   assert.equal(configured?.default, PROJECT_GAME_ID)
 
   const unconfigured = recordedWithoutProject.get('upload')?.options.get('game')
-  assert.equal(unconfigured?.demandOption, false)
+  assert.equal(unconfigured?.demandOption, true)
   assert.equal(unconfigured?.default, undefined)
 })
 

@@ -40,17 +40,17 @@ const funnelHashFields = ['event_hash', 'prefix_hashes'] as const
 type FunnelHashField = typeof funnelHashFields[number]
 
 export const joinPolicy = {
-  supported: 'Only combine tables through joins supported by the deployed API and documented by the table metadata. The deployed API is authoritative.',
+  supported: 'Only combine the bundled top-level table with join-only sources documented by the bundled table metadata. The CLI rejects every other source before contacting the API.',
   shared_fields: 'Matching field names or independently aggregated rows do not prove that two tables can be joined or that their rows describe the same population.',
   unsupported: 'If two tables cannot be joined, do not estimate, infer, interpolate, or fabricate combined values that depend on the missing relationship. State that the data cannot be combined and report only independently supported results separately.'
 }
 
 export const queryDescription = {
-  description: 'JSON query language accepted by POST /_data. The CLI validates its basic structure and forwards it without injecting filters or rewriting fields.',
+  description: 'JSON query language accepted by POST /_data. The CLI validates structure, bundled references, and field aggregation contracts before forwarding a query without rewriting it.',
   timezone: analyticsTimeZone,
   root_keys: rootKeys,
   root: {
-    from: 'Required top-level table name. Use `poki data tables` to discover the bundled snapshot.',
+    from: 'Required bundled top-level table name. Use `poki data tables` to discover the complete source allowlist for this CLI.',
     select: 'Required non-empty array of select statements.',
     where: 'Top-level condition statement: {operator?: "and", expressions: [condition or nested statement, ...]}. The top level is always conjunctive for developer access: omit operator for the normal AND default or set it to and. A top-level or is rejected because the deployed API rewrites it to AND; put OR expressions inside a nested condition statement instead.',
     group: 'Array of field names.',
@@ -60,6 +60,38 @@ export const queryDescription = {
     include: `Map of a selected output column name (the alias when set) to {type: RESOURCE_TYPE}. Valid types: ${includeResourceTypes.join(', ')}. Each row's column value is used as a resource ID; IDs with no match are silently omitted from the response included map.`
   },
   joins: joinPolicy,
+  aggregation: {
+    discovery: '`poki data tables --full`, `poki data table`, and `poki data column` expose every machine-readable aggregation contract. Column entries also expose enum_values for exhaustive value sets and frontend_name when a backend field uses different frontend terminology. Metric discovery adds required_dimensions to each metric and table recommendation.',
+    contract_shape: '{kind, unit, allowed_aggregates, guidance, required_dimensions?: {all_of?: string[], one_of?: string[][]}, incompatible_addition_group?: string}. one_of lists alternative complete determinant keys; incompatible_addition_group identifies overlapping precomputed windows that cannot be added.',
+    kinds: {
+      dimension: 'A grouping or filter value. Its declared aggregates describe rows or representative values, never additive totals.',
+      identifier: 'An opaque entity key. Never sum or average it.',
+      additive_measure: 'A total whose represented units are disjoint over compatible rows; use only its declared additive aggregate.',
+      distinct_count: 'A pre-aggregated distinct entity count. Required dimensions keep source populations disjoint before it may be summed.',
+      repeated_measure: 'A value repeated across finer source rows. Collapse only with its declared aggregate while retaining one determinant key.',
+      row_ratio: 'A ratio or percentage defined for one source row. Select it at row grain; do not roll it up.',
+      window_total: 'A precomputed reporting-window total. Select windows separately and do not add fields in the same incompatible window group.'
+    },
+    required_dimensions: 'Each all_of dimension, or every dimension in one one_of determinant alternative, must either be directly selected and grouped (including through a direct field alias) or guaranteed to one value by ==, singleton in, or matching inclusive >= and <= bounds. Constraints may be in the top-level where or that aggregate\'s condition. A hidden group field and a computed alias do not preserve or fix the dimension for result interpretation.',
+    nested_expressions: 'An aggregate wrapping a formula or function applies to every value field inside it. Nested expressions and aggregate conditions cannot bypass a field contract.',
+    failure: 'Unknown references fail with UNKNOWN_DATA_REFERENCE. Incompatible aggregates or dropped required dimensions fail with INCOMPATIBLE_GRAIN before any API request. There is no override.',
+    gameplay_dates: 'Gameplay measures may roll across dates under the current one-day-gameplay reporting assumption.',
+    distinct_users: 'Distinct-user measures must retain or exactly filter both date and p4d_game_id; multi-day and cross-game user totals are rejected.'
+  },
+  game_events: {
+    communication_rule: 'When communicating with users, use the Poki for Developers frontend terms Category, What, and Action. Analytics queries and API payloads must use the mapped backend field names.',
+    field_mapping: [
+      { frontend_name: 'Category', backend_field: 'category', measure_argument: 1 },
+      { frontend_name: 'What', backend_field: 'action', measure_argument: 2 },
+      { frontend_name: 'Action', backend_field: 'label', measure_argument: 3 }
+    ],
+    query_example: {
+      frontend_request: { Category: 'progress', What: 'level_1', Action: 'complete' },
+      backend_filters: [['category', '==', 'progress'], ['action', '==', 'level_1'], ['label', '==', 'complete']]
+    },
+    lifecycle_normalization: 'In dbt_p4d_game_events_v2 and dbt_p4d_game_events_times_v2, lifecycle Actions start, complete, fail, visible, and interact are represented by counter or timing fields, so the backend label field is normalized to an empty string. The frontend term is still Action.',
+    funnel_keys: 'dbt_p4d_game_events_funnel_v2.event is encoded in frontend order as Category^What^Action from backend fields category^action^label. Copy the emitted key verbatim.'
+  },
   select_statement: {
     expression_source: 'Use exactly one of field, formula, function, or constant. An aggregate may wrap a field, formula, or function, but not a constant. Non-distinct count is the only exception: it takes no expression source.',
     field: 'Field name, optionally qualified with a server-supported join table.',
@@ -153,7 +185,8 @@ export const queryDescription = {
     'Most normal-user queries must provide a top-level ["team_id", "==", "<own-team-id>"] condition; the API determines which tables are exceptions.',
     'Qualified fields activate only joins supported by the server.',
     'Access failures surface as 404 responses rather than 403.',
-    'The bundled catalog is informative. The server remains authoritative for newer tables and columns, joins, permissions, and types — it allows additional tables beyond the bundled snapshot.',
+    'The bundled catalog is the authoritative table, join, field, and aggregation allowlist for this CLI. Newer backend schema is unavailable until a CLI update adds its contract.',
+    'The deployed API remains authoritative for permissions and final execution after local structural and semantic validation passes.',
     'Bundled recipes mark their inputs with <UPPERCASE> tokens named by the recipe parameters listed in `poki data recipes`, and those names must be filled before a query executes. Angle-bracket text naming no recipe parameter is an ordinary string value, so patterns such as ["message", "ilike", "%<TAG>%"] execute unchanged.'
   ],
   result: {
@@ -163,10 +196,10 @@ export const queryDescription = {
     column_names: 'The server names each output column by its alias when set, otherwise by the final segment of its field name after join qualification. The CLI uses that same rule for includes and freshness evidence, and requires aliases for computed top-level selects plus unique resolved output names, preventing empty or duplicate row keys. A response with duplicate header names is invalid.',
     signed_int64_hashes: 'Funnel event_hash and prefix_hashes identifiers can exceed JavaScript safe-integer precision. Make the server return strings with toString(event_hash) or groupUniqArray(toString(event_hash)), and reuse those strings verbatim in has_any_int64 filters. Derived hash condition expressions are rejected except for the canonical length(prefix_hashes) == 0 empty-prefix predicate.',
     included: 'When the query uses include, the response included value is an object keyed by a reviewed developer JSON:API resource type, each mapping resource IDs to resources. The CLI flattens each valid resource with its standard JSON:API normalization (attributes and relationship data merged into one object). Unsupported response types are omitted, and malformed resources are reduced to their {type, id} identity instead of exposing unreviewed backend data.',
-    evidence: 'meta.evidence contains the exact query, recipe name when applicable, source, requested limit and offset, returned and total row counts, completeness and has_more, analytics timezone, freshness status, and structured warnings. Freshness is returned_in_rows only when a selected last_updated_at output contains actual timestamp strings; using table_update_times without that output is not freshness evidence.',
+    evidence: 'meta.evidence contains the exact query, recipe name when applicable, source, requested limit and offset, returned and total row counts, completeness and has_more, analytics timezone, passed semantic-contract version, source grain and population, applicable field terminology and interpretation notes, selected measure contracts, non-blocking measure-interpretation warnings, freshness status, and operational warnings. Freshness is returned_in_rows only when a selected last_updated_at output contains actual timestamp strings; using table_update_times without that output is not freshness evidence.',
     malformed_response: 'Malformed analytics responses fail closed with structural diagnostics only: document/member types, presence, lengths, and shape booleans. Backend values and arbitrary payload fields are never copied into the error.',
     csv: '--format csv executes the same structured query with the csv parameter and requests text/csv;base64. The CLI base64-decodes the payload and prints it verbatim with exactly one trailing newline; headers come from the server unchanged, so aliasing selects is the only bundled way to control CSV column names. CSV cannot carry meta.evidence: run once as JSON or TOON to inspect completeness before relying on an export. --format csv cannot be combined with --validate-only.',
-    validate_only: '--validate-only performs local structural validation without contacting the API and prints {local_structure_valid: true, api_validated: false, executable: "unknown", query, warnings?, meta}. It never claims that the deployed API will accept or execute the query.'
+    validate_only: '--validate-only performs local structural and bundled semantic validation without contacting the API and prints {local_structure_valid: true, local_semantics_valid: true, api_validated: false, executable: "unknown", query, meta}. It never claims that the deployed API will accept or execute the query.'
   },
   minimal_example: {
     from: 'dbt_p4d_gameplays',
@@ -195,6 +228,8 @@ export const queryTopics = [
   'formulas',
   'functions',
   'joins',
+  'aggregation',
+  'game-events',
   'ordering',
   'timezone',
   'limits',
@@ -223,6 +258,8 @@ export function describeQueryTopic (topic?: QueryTopic): Record<string, unknown>
   if (topic === 'formulas') return { formulas: queryDescription.formulas }
   if (topic === 'functions') return { functions: queryDescription.functions }
   if (topic === 'joins') return { joins: queryDescription.joins }
+  if (topic === 'aggregation') return { aggregation: queryDescription.aggregation }
+  if (topic === 'game-events') return { game_events: queryDescription.game_events }
   if (topic === 'ordering') return { ordering: queryDescription.root.order }
   if (topic === 'timezone') return { timezone: queryDescription.timezone }
   if (topic === 'limits') return { limits: queryDescription.limits }

@@ -5,6 +5,7 @@ import { commandSpec } from '../src/docs/commands'
 import {
   gameChangeRequestsDocumentation,
   gameEventFunnelsDocumentation,
+  gameEventsDocumentation,
   gamesDocumentation,
   netlibLobbiesDocumentation,
   playerFeedbackQuestionsDocumentation,
@@ -122,6 +123,16 @@ void test('server-backed field corrections stay explicit for agents', () => {
   const suggestedCategory = commandSpec(['games', 'update'])?.options?.find(option => option.name === '--suggested-category')
   assert.match(suggestedCategory?.description ?? '', /category name/i)
   assert.doesNotMatch(suggestedCategory?.description ?? '', /Suggested numeric/i)
+
+  assert.match(resourceFieldDetails(gameEventsDocumentation, 'category')?.details ?? '', /Frontend Category.*backend.*category/i)
+  assert.match(resourceFieldDetails(gameEventsDocumentation, 'action')?.interpretation ?? '', /Frontend term: What.*field action/i)
+  assert.match(resourceFieldDetails(gameEventsDocumentation, 'label')?.interpretation ?? '', /Frontend term: Action.*field label/i)
+  const gameEventCreate = commandSpec(['game-events', 'create'])
+  assert.match(gameEventCreate?.behavior?.join(' ') ?? '', /frontend Category.*What.*Action.*backend fields category.*action.*label/i)
+  assert.match(gameEventCreate?.options?.find(option => option.name === '--action')?.description ?? '', /Frontend What.*backend field action/i)
+  assert.match(gameEventCreate?.options?.find(option => option.name === '--label')?.description ?? '', /Frontend Action.*backend field label/i)
+  const funnelCreate = commandSpec(['game-event-funnels', 'create'])
+  assert.match(funnelCreate?.options?.find(option => option.name === '--event')?.description ?? '', /Category\^What\^Action.*category\^action\^label/)
 
   assert.equal(resourceFieldDetails(playtestsDocumentation, 'tags')?.mutability, 'editable')
   assert.equal(resourceFieldDetails(playtestsDocumentation, 'skipped_assessment')?.mutability, 'editable')

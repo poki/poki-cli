@@ -228,12 +228,35 @@ void test('data run --last-days fills the recipe date range offline', async () =
   assert.equal(spanDays, 6, `${fromDate}..${toDate}`)
 })
 
+void test('data run --last-days fills a datetime recipe with complete local calendar days', async () => {
+  const result = await runCli([
+    'data', 'run', 'game-errors', '--team', 'T', '--game', 'G', '--last-days', '8', '--validate-only', '--format', 'json'
+  ])
+  assert.equal(result.code, 0, result.stderr)
+  const output = JSON.parse(result.stdout)
+  const expressions = output.query.where.expressions as Array<[string, string, string]>
+  const fromDateTime = expressions.find(([field, operator]) => field === 'date_hour' && operator === '>=')?.[2]
+  const toDateTime = expressions.find(([field, operator]) => field === 'date_hour' && operator === '<=')?.[2]
+  assert.match(fromDateTime ?? '', /^\d{4}-\d{2}-\d{2} 00:00:00$/)
+  assert.match(toDateTime ?? '', /^\d{4}-\d{2}-\d{2} 23:59:59$/)
+  const fromDate = String(fromDateTime).slice(0, 10)
+  const toDate = String(toDateTime).slice(0, 10)
+  const spanDays = (Date.parse(`${toDate}T12:00:00Z`) - Date.parse(`${fromDate}T12:00:00Z`)) / 86400000
+  assert.equal(spanDays, 7, `${String(fromDateTime)}..${String(toDateTime)}`)
+})
+
 void test('data run rejects conflicting or invalid date-range parameters', async () => {
   const combined = await runCli([
     'data', 'run', 'game-users', '--team', 'T', '--game', 'G', '--last-days', '7', '--from-date', '2026-07-01', '--validate-only', '--format', 'json'
   ])
   assert.equal(combined.code, 2)
   assert.equal(JSON.parse(combined.stderr).error.code, 'INVALID_INPUT')
+
+  const combinedDateTime = await runCli([
+    'data', 'run', 'game-errors', '--team', 'T', '--game', 'G', '--last-days', '8', '--from-datetime', '2026-07-01 00:00:00', '--validate-only', '--format', 'json'
+  ])
+  assert.equal(combinedDateTime.code, 2)
+  assert.equal(JSON.parse(combinedDateTime.stderr).error.code, 'INVALID_INPUT')
 
   const inverted = await runCli([
     'data', 'run', 'game-users', '--team', 'T', '--game', 'G', '--from-date', '2026-07-31', '--to-date', '2026-07-01', '--validate-only', '--format', 'json'
