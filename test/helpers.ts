@@ -22,8 +22,10 @@ const entry = join(repository, 'test/cli-entry.ts')
 const productEntry = join(repository, 'src/index.ts')
 const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx', { paths: [repository] })).href
 
-// Spawned CLIs must never observe a developer's exported service configuration
-// or their real platform config directory, so tests stay hermetic on any machine.
+// Spawned CLIs must never observe a developer's exported service configuration,
+// platform config directory, or ignored project files, so tests stay hermetic on
+// any machine. Tests for project configuration pass their working directory
+// explicitly; every other CLI starts in a private empty directory.
 // The private entry point injects unroutable API/auth URLs by default; the
 // production executable has no corresponding environment override.
 export const UNROUTABLE_URL = 'http://127.0.0.1:1'
@@ -42,7 +44,7 @@ export function pokiConfigDirectory (root: string): string {
 
 // The private config directory only exists for the lifetime of the CLI process
 // it belongs to, so `discard` is the moment it is provably unobservable.
-function hermeticEnvironment (): { environment: NodeJS.ProcessEnv, discard: () => void } {
+function hermeticEnvironment (): { environment: NodeJS.ProcessEnv, cwd: string, discard: () => void } {
   const environment: NodeJS.ProcessEnv = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (key.startsWith('POKI_') || key === 'SERVICE_ENV' || key === 'XDG_CONFIG_HOME' || key === 'LOCALAPPDATA') continue
@@ -55,7 +57,7 @@ function hermeticEnvironment (): { environment: NodeJS.ProcessEnv, discard: () =
   // Update checks are tested explicitly. Every other test stays offline and
   // cannot accidentally contact npm merely because it executes an API command.
   environment.POKI_CLI_UPDATE_CHECK = '0'
-  return { environment, discard: () => rmSync(configHome, { recursive: true, force: true }) }
+  return { environment, cwd: configHome, discard: () => rmSync(configHome, { recursive: true, force: true }) }
 }
 
 async function runEntry (entryPath: string, args: string[], options: { env?: NodeJS.ProcessEnv, cwd?: string, stdin?: string }): Promise<RunResult> {
@@ -63,7 +65,7 @@ async function runEntry (entryPath: string, args: string[], options: { env?: Nod
   try {
     return await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ['--import', tsx, entryPath, ...args], {
-        cwd: options.cwd ?? repository,
+        cwd: options.cwd ?? hermetic.cwd,
         env: { ...hermetic.environment, ...options.env },
         stdio: 'pipe'
       })
@@ -91,12 +93,12 @@ export async function runProductCli (args: string[], options: { env?: NodeJS.Pro
 // Process-level tests need the child itself - to signal it, or to close its
 // stdout pipe - so they spawn the CLI instead of awaiting runCli. The
 // environment stays hermetic in exactly the same way, and the child's own exit
-// - not a call the test has to remember - releases its config directory.
-export function spawnCli (args: string[], options: { env?: NodeJS.ProcessEnv, preload?: string } = {}): ChildProcessWithoutNullStreams {
+// - not a call the test has to remember - releases its private directory.
+export function spawnCli (args: string[], options: { env?: NodeJS.ProcessEnv, preload?: string, cwd?: string } = {}): ChildProcessWithoutNullStreams {
   const hermetic = hermeticEnvironment()
   const preload = options.preload === undefined ? [] : ['--import', pathToFileURL(options.preload).href]
   const child = spawn(process.execPath, ['--import', tsx, ...preload, entry, ...args], {
-    cwd: repository,
+    cwd: options.cwd ?? hermetic.cwd,
     env: { ...hermetic.environment, ...options.env },
     stdio: 'pipe'
   })
