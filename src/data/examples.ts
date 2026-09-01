@@ -71,6 +71,7 @@ function lifecycleEventsQuery (sums: string[], nonZero: string[]): Record<string
     where: {
       expressions: [
         ...gameDateExpressions,
+        ['label', '==', ''],
         {
           operator: 'or',
           expressions: nonZero.map(field => [`dbt_p4d_game_events_v2.${field}`, '>', 0])
@@ -152,7 +153,7 @@ export const dataRecipes: DataRecipe[] = [
   },
   {
     name: 'all-game-events',
-    description: 'All custom event category, action, and label combinations for a game, ordered by gameplay reach.',
+    description: 'All custom event Category, What, and Action combinations for a game, ordered by gameplay reach. Result fields use backend names category, action, and label respectively.',
     parameters: gameDateParameters,
     tables: ['dbt_p4d_game_events_v2'],
     query: {
@@ -191,7 +192,7 @@ export const dataRecipes: DataRecipe[] = [
   },
   {
     name: 'game-events-export',
-    description: 'Plain non-lifecycle, non-funnel event totals by category, action, and label, ready for CSV export.',
+    description: 'Plain non-lifecycle, non-funnel event totals by frontend Category, What, and Action, ready for CSV export. Result fields use backend names category, action, and label respectively.',
     parameters: gameDateParameters,
     tables: ['dbt_p4d_game_events_v2'],
     query: plainEventTotalsQuery
@@ -209,9 +210,9 @@ export const dataRecipes: DataRecipe[] = [
     parameters: {
       ...gameDateParameters,
       TIME_TYPE: 'One of event, complete, fail, or interact.',
-      CATEGORY: 'Exact event category.',
-      ACTION: 'Exact event action.',
-      LABEL: 'Exact normalized event label; use an empty string when applicable.'
+      CATEGORY: 'Exact frontend Category; applied to backend field category.',
+      ACTION: 'Exact frontend What; applied to legacy backend field action.',
+      LABEL: 'Exact frontend Action; applied to legacy backend field label. Use an empty string for normalized lifecycle Actions when applicable.'
     },
     tables: ['dbt_p4d_game_events_times_v2'],
     query: {
@@ -272,7 +273,7 @@ export const dataRecipes: DataRecipe[] = [
   },
   {
     name: 'game-users',
-    description: 'Daily active, playing, non-playing, loading, and finished-loading user totals for one game. Outside the playground context, loading users fall back to active users.',
+    description: 'Daily active, playing, non-playing, loading, and finished-loading user totals for one game. For external gameplay outside Poki, loading users fall back to active users; context is playground for gameplay on Poki and external otherwise.',
     parameters: gameDateParameters,
     tables: ['dbt_p4d_users'],
     query: dailyQuery('dbt_p4d_users', [

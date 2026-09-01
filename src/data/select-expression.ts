@@ -6,6 +6,7 @@ export interface SelectExpressionContext {
   path: string
   counted: boolean
   inCondition: boolean
+  aggregate?: string
 }
 
 export interface SelectExpressionFieldContext extends SelectExpressionContext {
@@ -42,7 +43,8 @@ export function visitSelectExpression (
   const initialContext: SelectExpressionContext = {
     path: options.path ?? (options.root === 'condition' ? 'condition' : 'select'),
     counted: false,
-    inCondition: options.root === 'condition'
+    inCondition: options.root === 'condition',
+    aggregate: undefined
   }
 
   const visitCondition = (condition: unknown, context: SelectExpressionContext): void => {
@@ -69,8 +71,9 @@ export function visitSelectExpression (
   }
 
   const visitSelect = (statement: Record<string, unknown>, context: SelectExpressionContext): void => {
-    const counted = context.counted || statement.aggregate === 'count'
-    const selectContext = { ...context, counted }
+    const aggregate = typeof statement.aggregate === 'string' ? statement.aggregate : context.aggregate
+    const counted = context.counted || aggregate === 'count'
+    const selectContext = { ...context, aggregate, counted }
     visitor.select?.(statement, selectContext)
 
     if (typeof statement.field === 'string') {

@@ -63,6 +63,7 @@ void test('structured shapes help explains analytics condition select expression
   assert.match(conditions, /left may be a field or validated select-statement expression/)
   assert.match(conditions, /right may be the operator-specific literal value\(s\) or a validated select-statement expression/)
   assert.match(conditions, /not as database subqueries/)
+  assert.match(String(document.analytics_results.game_event_terminology), /Game Events.*Category.*What.*Action.*category.*action.*label/i)
 
   const authRequired = document.error_envelope.codes.find((code: string) => code.startsWith('AUTH_REQUIRED'))
   assert.match(authRequired, /ask the user.*poki auth login.*do not run.*retry.*after the user confirms/i)

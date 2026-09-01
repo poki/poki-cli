@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, request as httpRequest, IncomingMessage, RequestOptions } from 'node:http'
 import { Socket } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -180,6 +180,21 @@ void test('legacy upload is human-only and help directs structured callers to ve
     help.input_schema.options.find((option: { name: string }) => option.name === '--build-dir')?.description ?? '',
     /existing empty directories/i
   )
+})
+
+void test('legacy upload rejects a missing game before creating an archive or contacting the API', async t => {
+  const directory = temporaryDirectory(t, 'legacy-missing-game')
+  const build = join(directory, 'dist')
+  mkdirSync(build)
+  writeFileSync(join(build, 'index.html'), '<!doctype html>')
+
+  const result = await runCli(['upload', '--build-dir', build], { cwd: directory })
+  assert.equal(result.code, 2, result.stderr)
+  assert.equal(result.stdout, '')
+  const error = parseToon(result.stderr).error
+  assert.equal(error.code, 'INVALID_INPUT')
+  assert.match(error.message, /game ID is required/i)
+  assert.deepEqual(readdirSync(directory).filter(name => name.endsWith('.zip')), [])
 })
 
 void test('createZip archives a directory into a ZIP file', async t => {

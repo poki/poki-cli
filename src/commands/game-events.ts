@@ -68,11 +68,11 @@ async function eventData (argv: Record<string, unknown>, create: boolean): Promi
 
 function withEventMutation (yargs: Argv, projectGameId: string | undefined, create: boolean): Argv {
   let command = withGameMutationOptions(withDataOption(yargs, create
-    ? 'JSON or TOON category, action, label, and description fields; the server always enables new events and includes them in funnels'
+    ? 'JSON or TOON backend fields category, action, label, and description; they represent frontend Category, What, and Action respectively, and the server always enables new events and includes them in funnels'
     : 'JSON or TOON event fields inline, from @file, or stdin'), projectGameId, 'Game that owns the event')
-    .option('category', { describe: "SDK measure category; 1-64 characters and no '/' or '^'", type: 'string' })
-    .option('action', { describe: "SDK measure what value (legacy API field name); 1-64 characters and no '/' or '^'", type: 'string' })
-    .option('label', { describe: "SDK measure action value (legacy API field name); 0-64 characters and no '/' or '^'", type: 'string' })
+    .option('category', { describe: "Frontend Category; backend field category; 1-64 characters and no '/' or '^'", type: 'string' })
+    .option('action', { describe: "Frontend What; legacy backend field action; 1-64 characters and no '/' or '^'", type: 'string' })
+    .option('label', { describe: "Frontend Action; legacy backend field label; 0-64 characters and no '/' or '^'", type: 'string' })
     .option('description', { describe: create ? 'Required human-readable purpose' : 'Human-readable purpose', type: 'string' })
   if (!create) {
     command = command
@@ -100,7 +100,7 @@ async function funnelData (argv: Record<string, unknown>, create: boolean): Prom
 function withFunnelMutation (yargs: Argv, projectGameId: string | undefined): Argv {
   return withGameMutationOptions(withDataOption(yargs, 'JSON or TOON object containing title and caret-delimited event keys'), projectGameId, 'Game that owns the funnel')
     .option('title', { describe: 'Funnel title, up to 128 characters', type: 'string' })
-    .option('event', { describe: "Ordered category^what^action key from funnel analytics; '^' is the separator; repeat in traversal order", type: 'array', string: true })
+    .option('event', { describe: "Ordered frontend Category^What^Action key from funnel analytics, sourced from backend category^action^label; '^' is the separator; repeat in traversal order", type: 'array', string: true })
 }
 
 export function registerGameEventCommands (yargs: Argv, api: ApiClient): Argv {
