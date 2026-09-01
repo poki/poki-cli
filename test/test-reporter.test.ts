@@ -33,5 +33,7 @@ void test('the CI reporter prints named failures and hides passing tests', t => 
   assert.match(result.stdout, /FAIL failing reporter fixture/)
   assert.match(result.stdout, /reporter-fixture\.test\.mjs:5:5/)
   assert.match(result.stdout, /AssertionError \[ERR_ASSERTION\]/)
+  assert.match(result.stdout, /actual: 'actual'/)
+  assert.match(result.stdout, /expected: 'expected'/)
   assert.match(result.stdout, /::error title=Failed test,file=.*reporter-fixture\.test\.mjs,line=5,col=5::/)
 })

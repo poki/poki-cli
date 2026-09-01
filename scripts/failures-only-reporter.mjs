@@ -25,8 +25,8 @@ function sourceLocation (failure) {
 function errorText (failure) {
   const error = failure.details?.error
   const cause = error?.cause
-  if (typeof cause?.stack === 'string') return cause.stack
-  if (typeof error?.stack === 'string') return error.stack
+  if (cause instanceof Error) return inspect(cause, { colors: false, depth: null })
+  if (error instanceof Error) return inspect(error, { colors: false, depth: null })
   return inspect(cause ?? error, { colors: false, depth: null })
 }
 

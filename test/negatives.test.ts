@@ -47,7 +47,7 @@ void test('invalid enum values are rejected locally with the valid choices named
     // The invalid value under test is the --format itself, so the error falls
     // back to the default TOON encoding on stderr.
     { args: ['help', '--format', 'yaml'], toon: true, pattern: /toon or json/ },
-    { args: ['upload', '--format', 'weird'], toon: true, pattern: /Unknown argument: --format/ }
+    { args: ['upload', '--game', 'g', '--format', 'weird'], toon: true, pattern: /Unknown argument: --format/ }
   ]
   await Promise.all(cases.map(async ({ args, toon, pattern }) => {
     const label = args.join(' ')
@@ -55,7 +55,7 @@ void test('invalid enum values are rejected locally with the valid choices named
     assert.equal(result.code, 2, `${label}: ${result.stderr}`)
     const error = toon === true ? toonError(result.stderr) : jsonError(result.stderr)
     assert.equal(error.code, 'INVALID_INPUT', label)
-    assert.match(error.message, pattern, label)
+    assert.match(error.message, pattern, `${label}: ${error.message}`)
   }))
 })
 
