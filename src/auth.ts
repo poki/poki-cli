@@ -301,7 +301,14 @@ export async function refreshStoredAuth (config: Config, authUrl = serviceEnviro
   const body = await postAuth('/auth/refresh', { refresh_token: current.refresh_token }, 'refresh', authUrl)
   const refreshed = decodeBearerCredentials({ ...current, ...body })
   if (refreshed === undefined) throw new AuthRequestError('The authentication refresh returned invalid credentials.')
-  writeStoredAuth(refreshed)
+  try {
+    writeStoredAuth(refreshed)
+  } catch {
+    // The current auth service keeps the long-lived refresh token unchanged,
+    // so persisting its short-lived access token is only a cache optimization.
+    // A read-only sandbox must still be able to use the refreshed token for the
+    // command that requested it.
+  }
   return refreshed
 }
 

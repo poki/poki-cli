@@ -481,7 +481,7 @@ void test('refreshed credentials are published atomically into an owner-only fil
   })
 })
 
-void test('a failed credential write keeps the previous credentials usable', {
+void test('a failed credential write returns the refreshed credentials and keeps the previous file usable', {
   skip: process.platform === 'win32' || process.getuid?.() === 0
     ? 'needs POSIX directory permissions enforced against a non-root user'
     : false
@@ -497,7 +497,8 @@ void test('a failed credential write keeps the previous credentials usable', {
     // would have left destroyed credentials behind.
     chmodSync(configDirectory, 0o500)
     try {
-      await assert.rejects(refreshStoredAuth(stored, authUrl))
+      const refreshed = await refreshStoredAuth(stored, authUrl)
+      assert.deepEqual(refreshed, { ...stored, access_token: 'fresh-token' })
       assert.equal(readFileSync(authPath, 'utf8'), storedText)
     } finally {
       chmodSync(configDirectory, 0o700)
@@ -506,7 +507,7 @@ void test('a failed credential write keeps the previous credentials usable', {
   })
 })
 
-void test('a failed credential publication leaves no temporary file behind', async t => {
+void test('a failed credential publication returns the refreshed credentials and leaves no temporary file behind', async t => {
   const directory = isolateAuthEnvironment(t, 'auth-publish-failure')
 
   const configDirectory = pokiConfigDirectory(directory)
@@ -516,7 +517,8 @@ void test('a failed credential publication leaves no temporary file behind', asy
     // fails after the temporary file already holds the fresh token.
     rmSync(authPath)
     mkdirSync(authPath)
-    await assert.rejects(refreshStoredAuth(stored, authUrl))
+    const refreshed = await refreshStoredAuth(stored, authUrl)
+    assert.deepEqual(refreshed, { ...stored, access_token: 'fresh-token' })
     assert.deepEqual(readdirSync(configDirectory), ['auth.json'])
     rmSync(authPath, { recursive: true })
   })

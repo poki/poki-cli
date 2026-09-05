@@ -18,6 +18,7 @@ import {
   DeveloperPermissionCode,
   developerPermissionRequirements
 } from '../developer-permissions'
+import { AUTH_LOGIN_USER_ACTION_HINT, AUTH_REQUIRED_HINT } from '../errors'
 import { addAudienceCommandSpecs } from './command-groups/audiences'
 import { addAuthCommandSpecs } from './command-groups/auth'
 import { addDataCommandSpecs } from './command-groups/data'
@@ -85,6 +86,12 @@ export interface CommandSpec {
   examples?: HelpExample[]
   discovery?: HelpExample[]
   references?: Array<{ title: string, url: string }>
+  agent_execution?: {
+    allowed: boolean
+    required_actor?: 'developer'
+    reason?: string
+    developer_commands?: Record<string, string>
+  }
   output?: Record<string, unknown>
   missing_input?: string
   network?: NetworkContract
@@ -169,7 +176,7 @@ const jsonApiOutput = {
 const standardExitCodes = {
   0: 'success or help',
   2: 'invalid input or local validation failure',
-  3: 'authentication required or rejected; ask the user to run poki auth login in an interactive terminal and complete the browser sign-in; the agent must not run it',
+  3: `authentication required or rejected; ${AUTH_LOGIN_USER_ACTION_HINT}`,
   4: 'authenticated API request denied by permission or another client-visible rule, or resource not found',
   5: 'network, timeout, server, or invalid API response failure',
   // 128 + SIGINT, the POSIX convention for a signal-terminated process.
@@ -326,7 +333,7 @@ add({
     'Credentials use auth.json below an absolute XDG_CONFIG_HOME or LOCALAPPDATA, falling back to ~/.config/poki.'
   ],
   quickstart: [
-    example('poki auth login', 'One-time browser sign-in; requires a human to complete it.'),
+    example('poki auth login', 'Agent must not run. Developer dependency: npx poki auth login.'),
     example('poki init --game GAME_ID --build-dir dist', 'Configure this project directory.'),
     example('poki whoami', 'Confirm identity, team ID, and granted permissions.'),
     example('poki versions upload --label "First build" --dry-run', 'Preview the first build upload.')
@@ -394,10 +401,14 @@ function key (path: readonly string[]): string {
 
 export const commandSpecs = new Map(specs.map(spec => [key(spec.path), spec]))
 
-function children (path: string[]): Array<{ path: string, summary: string }> {
+function children (path: string[]): Array<{ path: string, summary: string, agent_execution?: CommandSpec['agent_execution'] }> {
   return specs
     .filter(spec => spec.path.length === path.length + 1 && path.every((part, index) => spec.path[index] === part))
-    .map(spec => ({ path: commandLabel(spec.path), summary: spec.summary }))
+    .map(spec => ({
+      path: commandLabel(spec.path),
+      summary: spec.summary,
+      ...(spec.agent_execution === undefined ? {} : { agent_execution: spec.agent_execution })
+    }))
 }
 
 export function commandSpec (path: string[]): CommandSpec | undefined {
@@ -500,6 +511,7 @@ export function helpDocument (path: string[], notice?: HelpNotice): Record<strin
     },
     ...(spec.behavior === undefined ? {} : { behavior: spec.behavior }),
     ...(spec.side_effects === undefined ? {} : { side_effects: spec.side_effects }),
+    ...(spec.agent_execution === undefined ? {} : { agent_execution: spec.agent_execution }),
     ...(spec.examples === undefined ? {} : { examples: spec.examples }),
     ...(spec.discovery === undefined ? {} : { discovery: spec.discovery }),
     ...(spec.references === undefined ? {} : { references: spec.references })
@@ -527,6 +539,7 @@ export function commandManifest (full = false): Record<string, unknown> {
         usage: usageFor(spec, children(spec.path).length > 0),
         summary: spec.summary,
         ...(spec.deprecated === true ? { deprecated: true } : {}),
+        ...(spec.agent_execution === undefined ? {} : { agent_execution: spec.agent_execution }),
         risk: spec.risk,
         network: spec.network,
         ...(spec.network?.contacts_api === true && spec.permission_codes !== undefined ? { permission_codes: spec.permission_codes, ...(spec.permission_logic === undefined ? {} : { permission_logic: spec.permission_logic }) } : {}),
@@ -571,7 +584,8 @@ export function searchCommandManifest (text: string): Record<string, unknown> {
     options: (spec.options ?? []).filter(value => !universalOptionObjects.has(value)),
     behavior: spec.behavior,
     risk: spec.risk,
-    aliases: spec.aliases
+    aliases: spec.aliases,
+    agent_execution: spec.agent_execution
   }).toLowerCase().includes(needle))
   const topicMatches = helpTopics.filter(topic => {
     return `${topic.name} ${topic.summary} ${topic.keywords.join(' ')}`.toLowerCase().includes(needle)
@@ -606,7 +620,7 @@ export function searchCommandManifest (text: string): Record<string, unknown> {
   return {
     query: text,
     commands: [
-      ...matches.map(spec => ({ command: commandLabel(spec.path), usage: usageFor(spec, children(spec.path).length > 0), summary: spec.summary, risk: spec.risk })),
+      ...matches.map(spec => ({ command: commandLabel(spec.path), usage: usageFor(spec, children(spec.path).length > 0), summary: spec.summary, risk: spec.risk, ...(spec.agent_execution === undefined ? {} : { agent_execution: spec.agent_execution }) })),
       ...topicMatches.map(topic => ({ command: `poki help ${topic.name}`, usage: `poki help ${topic.name}`, summary: topic.summary, risk: 'offline' as CommandRisk }))
     ],
     ...(dataMatches.length === 0 ? {} : { data_matches: dataMatches }),
@@ -698,7 +712,7 @@ export function shapesDocument (): Record<string, unknown> {
         'INVALID_INPUT (exit 2): local validation; unknown commands embed details.suggestions and details.available_commands.',
         'UNKNOWN_DATA_REFERENCE (exit 2): an analytics query references a table, join source, or field outside the bundled authoritative catalog; no API request is sent.',
         'INCOMPATIBLE_GRAIN (exit 2): an analytics aggregate violates a field contract or drops required dimensions; details.violations lists every expression path and safe reformulations, no API request is sent, and no override exists.',
-        'AUTH_REQUIRED (exit 3): ask the user to run poki auth login in an interactive terminal and complete the browser sign-in; do not run the login command yourself; retry the original command only after the user confirms success.',
+        `AUTH_REQUIRED (exit 3): ${AUTH_REQUIRED_HINT}`,
         'PERMISSION_DENIED (exit 4, status 403): the backend explicitly identified an ACL failure; details includes the command’s documented permission requirements and an allowlisted API error summary containing only status, code, title, and detail.',
         'NOT_FOUND (exit 4): the resource does not exist in the scanned scope.',
         'ACTIVE_VERSION_MULTIPLE_TRACKS (exit 4, status 409): versions activate found more than one existing traffic track during its GET preflight and sent no PATCH.',

@@ -35,6 +35,7 @@ void test('root help is compact structured TOON with an optional implicit notice
   assert.equal(explicitDocument.usage, 'poki <command> [options]')
   assert.ok(explicitDocument.behavior.some((item: string) => item.includes('Europe/Amsterdam')))
   assert.ok(explicitDocument.behavior.some((item: string) => item.includes('non-data API endpoints use UTC')))
+  assert.match(explicitDocument.quickstart.find((item: { command: string }) => item.command === 'poki auth login')?.purpose ?? '', /agent.*not run.*developer.*npx poki auth login/i)
   assert.ok(explicitDocument.behavior.some((item: string) => /Only init.*auth.*deprecated upload.*cross-release compatible.*Pin an exact version/i.test(item)))
   assert.ok(explicitDocument.commands.some((command: { path: string }) => command.path === 'poki versions'))
   assert.ok(explicitDocument.commands.some((command: { path: string }) => command.path === 'poki version-activations'))
@@ -66,7 +67,28 @@ void test('structured shapes help explains analytics condition select expression
   assert.match(String(document.analytics_results.game_event_terminology), /Game Events.*Category.*What.*Action.*category.*action.*label/i)
 
   const authRequired = document.error_envelope.codes.find((code: string) => code.startsWith('AUTH_REQUIRED'))
-  assert.match(authRequired, /ask the user.*poki auth login.*do not run.*retry.*after the user confirms/i)
+  assert.match(authRequired, /ask the developer.*poki auth login.*npx poki auth login.*never run.*agent sandbox.*after the developer confirms.*retry/i)
+})
+
+void test('auth login is machine-readable as a developer-only action for global and project installs', () => {
+  const login = helpDocument(['auth', 'login']) as Record<string, any>
+  assert.deepEqual(login.agent_execution, {
+    allowed: false,
+    required_actor: 'developer',
+    reason: 'The saved credentials must belong to the developer environment and would be lost with an LLM or agent sandbox.',
+    developer_commands: {
+      global: 'poki auth login',
+      project_dependency: 'npx poki auth login'
+    }
+  })
+  assert.match(login.behavior.join(' '), /ask the developer.*never run.*agent sandbox/i)
+  assert.deepEqual(login.examples.map((item: { command: string }) => item.command), ['poki auth login'])
+
+  const auth = helpDocument(['auth']) as Record<string, any>
+  assert.equal(auth.commands.find((command: { path: string }) => command.path === 'poki auth login')?.agent_execution?.allowed, false)
+
+  const manifest = commandManifest() as Record<string, any>
+  assert.equal(manifest.commands.find((command: { command: string }) => command.command === 'poki auth login')?.agent_execution?.allowed, false)
 })
 
 void test('structured update help publishes cadence, exclusions, state, exact npm actions, and no-replay guidance', () => {

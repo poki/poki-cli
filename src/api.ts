@@ -77,6 +77,7 @@ export class ApiClient {
   private readonly transport: typeof globalThis.fetch
   private readonly readAuth: () => Config | undefined
   private readonly refreshAuth: (config: Config) => Promise<Config>
+  private inMemoryAuth: Config | undefined
   private beforeFirstRequest: (() => Promise<void>) | undefined
   private firstRequestPreparation: Promise<void> | undefined
   readonly timeoutMs: number
@@ -113,10 +114,11 @@ export class ApiClient {
   }
 
   async request<T = unknown> (request: ApiRequest): Promise<ApiResponse<T>> {
-    const config = decodeBearerCredentials(this.readAuth())
+    const config = this.inMemoryAuth ?? decodeBearerCredentials(this.readAuth())
     if (config?.access_token === undefined) {
       throw authRequired()
     }
+    this.inMemoryAuth = config
 
     let response = await this.execute<T>(request, config.access_token)
     if (response.status === 401) {
@@ -126,6 +128,9 @@ export class ApiClient {
           if (refreshed?.access_token === undefined) {
             throw authRequired('Authentication expired and could not be refreshed.')
           }
+          // Keep a successfully refreshed token usable for every later request
+          // in this invocation even when the credential file cannot be updated.
+          this.inMemoryAuth = refreshed
           // A 401 rejection happens before the server executes the request,
           // so replaying a mutation once after a refresh cannot double-apply.
           response = await this.execute<T>(request, refreshed.access_token)
