@@ -62,10 +62,18 @@ When both exist, `poki.json` takes precedence. Run the CLI from the configured p
 
 ## Log in
 
-Authenticate explicitly once:
+The developer must authenticate explicitly once, manually, in their own terminal. An LLM or agent must ask the developer to do this and must never run the login command itself, because that would save the credentials in the agent sandbox instead of the developer's environment.
+
+Without a project-local dependency, the developer can run:
 
 ```sh
 npx @poki/cli@experimental auth login
+```
+
+If `@poki/cli` is already installed as a project dependency, the developer can run its `poki` binary from that project:
+
+```sh
+npx poki auth login
 ```
 
 This opens the Poki sign-in flow in a browser and saves OAuth credentials locally. Normal API and analytics commands never open a browser automatically. The only exception is the deprecated legacy `upload` command, which preserves its pre-existing implicit browser-login behavior for backwards compatibility.

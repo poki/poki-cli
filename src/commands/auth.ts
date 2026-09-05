@@ -7,7 +7,7 @@ import { structuredFormat, writeStructured } from '../output'
 
 export function registerAuthCommands (yargs: Argv): Argv {
   return yargs.command('auth', 'Manage the OAuth credentials used by Poki API commands', auth => auth
-    .command('login', 'Open the Poki sign-in flow and save OAuth credentials', loginCommand => withFormatOption(loginCommand), async argv => {
+    .command('login', 'Developer-only: open the Poki sign-in flow and save OAuth credentials', loginCommand => withFormatOption(loginCommand), async argv => {
       await login(message => process.stderr.write(`${message}\n`))
       writeStructured(getAuthStatus(), structuredFormat(argv.format))
     })

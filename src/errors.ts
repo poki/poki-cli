@@ -4,8 +4,8 @@ const safeApiErrorFields = ['status', 'code', 'title', 'detail'] as const
 export type SafeApiError = Partial<Record<typeof safeApiErrorFields[number], string>>
 export interface SafeApiErrorResponse extends Record<string, unknown> { errors?: SafeApiError[] }
 
-export const AUTH_LOGIN_USER_ACTION_HINT = 'Ask the user to run `poki auth login` in an interactive terminal and complete the browser sign-in. Do not run `poki auth login` yourself.'
-export const AUTH_REQUIRED_HINT = `${AUTH_LOGIN_USER_ACTION_HINT} After the user confirms sign-in succeeded, retry the original command.`
+export const AUTH_LOGIN_USER_ACTION_HINT = 'Ask the developer to run `poki auth login` for a global install or `npx poki auth login` for a project dependency in their own interactive terminal and complete the browser sign-in. Never run either command yourself. Credentials must be stored in the developer\'s environment, not an LLM or agent sandbox.'
+export const AUTH_REQUIRED_HINT = `${AUTH_LOGIN_USER_ACTION_HINT} After the developer confirms sign-in succeeded, retry the original command.`
 
 /**
  * Project a backend JSON:API error document onto the reviewed developer

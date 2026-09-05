@@ -292,7 +292,7 @@ void test('legacy upload maps transport and response failures to documented exit
   const cases: Array<{ failure: Error, code: string, exitCode: number, hint: RegExp }> = [
     { failure: new LegacyUploadError(secret, 'timeout'), code: 'API_TIMEOUT', exitCode: 5, hint: /versions list/ },
     { failure: new LegacyUploadError(secret, 'network'), code: 'NETWORK_ERROR', exitCode: 5, hint: /versions list/ },
-    { failure: new LegacyUploadError(secret, 'response', 401), code: 'AUTH_REQUIRED', exitCode: 3, hint: /auth login|POKI_UPLOAD_TOKEN/ },
+    { failure: new LegacyUploadError(secret, 'response', 401), code: 'AUTH_REQUIRED', exitCode: 3, hint: /ask the developer.*npx poki auth login.*never run.*agent sandbox.*POKI_UPLOAD_TOKEN/i },
     { failure: new LegacyUploadError(secret, 'response', 403), code: 'HTTP_403', exitCode: 4, hint: /versions list/ },
     { failure: new LegacyUploadError(secret, 'response', 422), code: 'HTTP_422', exitCode: 4, hint: /versions list/ },
     { failure: new LegacyUploadError(secret, 'response', 503), code: 'HTTP_503', exitCode: 5, hint: /versions list/ },

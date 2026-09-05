@@ -67,6 +67,36 @@ void test('the API client refreshes once on 401 and replays reads and mutations 
   }
 })
 
+void test('the API client reuses refreshed credentials in memory for later requests', async () => {
+  const authorizations: string[] = []
+  let authReads = 0
+  let refreshes = 0
+  const api = new ApiClient('https://example.invalid', {
+    fetch: (async (_input: string | URL | Request, init?: RequestInit) => {
+      const authorization = new Headers(init?.headers).get('Authorization') ?? ''
+      authorizations.push(authorization)
+      return authorization === 'Bearer old-token'
+        ? jsonResponse(401, { errors: [{ title: 'expired' }] })
+        : jsonResponse(200, { data: { type: 'games', id: 'game-1' } })
+    }) as typeof fetch,
+    readAuth: () => {
+      authReads++
+      return { access_type: 'Bearer', access_token: 'old-token', refresh_token: 'refresh-token' }
+    },
+    refreshAuth: async config => {
+      refreshes++
+      return { ...config, access_token: 'new-token' }
+    }
+  })
+
+  await api.request({ path: '/first' })
+  await api.request({ path: '/second' })
+
+  assert.deepEqual(authorizations, ['Bearer old-token', 'Bearer new-token', 'Bearer new-token'])
+  assert.equal(authReads, 1)
+  assert.equal(refreshes, 1)
+})
+
 void test('a repeated 401 becomes the standard auth-required error without a second refresh', async () => {
   for (const method of ['GET', 'POST'] as const) {
     let requests = 0

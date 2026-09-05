@@ -2,7 +2,7 @@ import { existsSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import type { Argv } from 'yargs'
 
 import { Config } from './config'
-import { CliError, registerInterruptCleanup } from './errors'
+import { AUTH_LOGIN_USER_ACTION_HINT, CliError, registerInterruptCleanup } from './errors'
 import { structuredFormat, writeStructured } from './output'
 import { LegacyUploadError, postToP4D } from './p4d'
 import { createZip } from './zipfile'
@@ -99,7 +99,7 @@ function legacyUploadFailure (error: unknown): CliError {
       return new CliError('AUTH_REQUIRED', 'The Poki API rejected the legacy upload credentials.', 3, {
         status,
         retryable: false,
-        hint: 'Run `poki auth login` (opens a browser and needs a human to complete sign-in), or set POKI_UPLOAD_TOKEN, then upload again.'
+        hint: `${AUTH_LOGIN_USER_ACTION_HINT} Alternatively, the developer can configure POKI_UPLOAD_TOKEN in their own environment. Then upload again.`
       })
     }
     // A 2xx the CLI could not read means the version was created. Reporting it
