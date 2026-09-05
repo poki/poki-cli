@@ -1,92 +1,140 @@
 # poki-cli
+
 [![npm](https://img.shields.io/npm/v/@poki/cli.svg?style=flat-square)](https://www.npmjs.com/package/@poki/cli)
 [![node](https://img.shields.io/node/v/@poki/cli.svg?style=flat-square)](https://nodejs.org/)
 [![license](https://img.shields.io/github/license/poki/poki-cli.svg?style=flat-square)](LICENSE)
 
-The [Poki for Developers](https://developers.poki.com/) command line utility allows you to upload game builds directly from your terminal or CI-pipeline.
+The [Poki for Developers](https://developers.poki.com/) CLI is designed primarily for LLMs. Humans only need to install it, configure the current game project, and complete browser authentication. The CLI itself contains the structured command documentation, field references, examples, permissions, and safety information an LLM needs.
 
-## Installation
+## Install
 
-You can run it directly the command using `npx`:
+Node.js 20.7 or newer is required. This preview is published on npm's opt-in `experimental` channel; an unqualified `@poki/cli` install follows the stable `latest` channel instead. Choose one persistent [npm installation mode](https://docs.npmjs.com/cli/install/).
+
+Install globally when the CLI should be available to the current user in every project:
+
 ```sh
-npx @poki/cli --help
+npm install --global --ignore-scripts @poki/cli@experimental
+poki --version
 ```
 
-Or you can add this to your project's `package.json`:
+Invoke this installation as `poki`.
+
+Install as a project-local development dependency when the project should pin and share its CLI version:
+
+```sh
+npm install --save-dev --ignore-scripts @poki/cli@experimental
+npx @poki/cli@experimental --version
+```
+
+Invoke this installation as `npx @poki/cli@experimental`. Installing or updating this mode modifies the project's `package.json` and npm lockfile, so review and commit those changes with the project.
+
+## Configure the project
+
+From the game project directory, run:
+
+```sh
+npx @poki/cli@experimental init --game GAME_ID --build-dir dist
+```
+
+`GAME_ID` is the game ID shown on its Poki for Developers page. `build-dir` is the directory containing the built game. This creates `poki.json`:
+
 ```json
 {
-  "scripts": {
-    "poki-upload": "poki upload"
-  },
-  "devDependencies": {
-    "@poki/cli": "*"
-  }
-}
-```
-And then run `npm install` or `yarn install` to install the dependency.
-
-
-## Configuration
-
-Before you can upload a build you will need to configure your game ID using the following command:
-```sh
-npx @poki/cli init --game c7bfd2ba-e23b-486f-9504-a6f196cb44df --build-dir dist
-```
-
-Replace `c7bfd2ba-e23b-486f-9504-a6f196cb44df` with your game ID (can be found in the address bar on your game page on https://developers.poki.com/).
-And replace `dist` with your build directory. This is the directory that will be uploaded to Poki for Developers.
-
-This will create a `poki.json` file in the root of your project containing the following: 
-```json
-{
-  "game_id": "c7bfd2ba-e23b-486f-9504-a6f196cb44df",
+  "game_id": "GAME_ID",
   "build_dir": "dist"
 }
 ```
 
-Alternatively you can add this to your `package.json`:
+Use `--force` if an existing `poki.json` should be replaced.
+
+The same configuration can instead be stored in `package.json`:
+
 ```json
 {
   "poki": {
-    "game_id": "c7bfd2ba-e23b-486f-9504-a6f196cb44df",
+    "game_id": "GAME_ID",
     "build_dir": "dist"
   }
 }
 ```
 
-## Uploading a build
+When both exist, `poki.json` takes precedence. Run the CLI from the configured project directory.
 
-To upload a new build you can simply run:
-```sh
-npx @poki/cli upload --name "$(git rev-parse --short HEAD)" --notes "$(git log -1 --pretty=%B)"
+## Log in
 
-# Or if you've configured the scripts in the package.json using npm:
-npm run-script poki-upload
-# Using yarn
-yarn poki-upload
-```
-Do make sure your game is built correctly in the configured build_dir.
+The developer must authenticate explicitly once, manually, in their own terminal. An LLM or agent must ask the developer to do this and must never run the login command itself, because that would save the credentials in the agent sandbox instead of the developer's environment.
 
-When using the upload command for the first time your browser will be opened and you'll be asked to authenticate.
-The authentication credentials will be stored in a `$XDG_CONFIG_HOME/poki/auth.json`, `$HOME/.config/poki/auth.json` or `%LOCALAPPDATA%\Poki\auth.json`.
-
-Also note that a Review still needs to be requested manually on the Poki for Developers platform (for now).
-
-## Full usage
+Without a project-local dependency, the developer can run:
 
 ```sh
-$ npx @poki/cli --help
-
-Commands:
-  poki init    Create a poki.json configuration file
-  poki upload  Upload a new version to Poki for Developers
-
-Options:
-      --version  Show version number
-  -h, --help     Show help
-
-Examples:
-  poki init --game c7bfd2ba-e23b-486f-9504-a6f196cb44df --build-dir dist
-  poki upload --name "New Version Name"
-  poki upload --name "$(git rev-parse --short HEAD)" --notes "$(git log -1 --pretty=%B)"
+npx @poki/cli@experimental auth login
 ```
+
+If `@poki/cli` is already installed as a project dependency, the developer can run its `poki` binary from that project:
+
+```sh
+npx poki auth login
+```
+
+This opens the Poki sign-in flow in a browser and saves OAuth credentials locally. Normal API and analytics commands never open a browser automatically. The only exception is the deprecated legacy `upload` command, which preserves its pre-existing implicit browser-login behavior for backwards compatibility.
+
+## Upgrading from 0.1.x
+
+`init` and the deprecated top-level `upload` command keep working as before, with one deliberate change: `poki upload` now exits non-zero when the archive or the upload fails. In 0.1.x it logged the failure and still exited `0`, so a pipeline could not tell a published build from a lost one. The human output is unchanged; a structured error document is appended to stderr after it.
+
+Automated pipelines should move to `poki versions upload`, which reports structured results on stdout and supports `--wait`, `--dry-run`, and `--format json`.
+
+## Compatibility policy
+
+Cross-release backwards compatibility is guaranteed only for `init`, the `auth login`, `auth status`, and `auth logout` commands, and the deprecated top-level `upload` command. That guarantee covers their documented command names, accepted inputs, core behavior, and documented output, while allowing explicitly documented safety or correctness fixes such as the legacy upload exit-code change above.
+
+No other command, option, normalized response shape, or workflow has a future cross-release backwards-compatibility guarantee or deprecation period. Automation using the modern LLM-focused surface should pin an exact `@poki/cli@VERSION`, review `poki help --all` after an intentional upgrade, and update its assumptions before adopting the new version.
+
+## Use with an LLM
+
+After setup, the LLM should start by running:
+
+```sh
+npx @poki/cli@experimental
+```
+
+The resulting structured help explains how to discover and use every supported command. This README intentionally does not duplicate that LLM-facing documentation.
+
+### Example prompts
+
+Copy one of these tasks into an LLM agent while it is running in a configured game project.
+
+#### Analyze game health
+
+```text
+Use the Poki CLI to analyze the configured game's events, errors, and player feedback from the last 30 days. Keep it read-only and report the most important findings with supporting numbers.
+```
+
+#### Run a playtest
+
+```text
+Use the Poki CLI to request 10 playtest recordings for the newest eligible version. Analyze every recording in parallel, summarize the main issues, and do not create a duplicate request.
+```
+
+#### Compare version activations
+
+```text
+Use the Poki CLI to compare gameplay and revenue before and after recent version activations. Keep it read-only and clearly explain any limits in the data.
+```
+
+### Daily update guidance
+
+Before the first eligible Poki API request in a rolling 24-hour period, the CLI asks npm for the stable `latest` version. The completed command continues normally. If a newer stable version exists, its successful result stays on stdout and a separate structured `CLI_UPDATE_AVAILABLE` notice is written to stderr after completion.
+
+The notice gives the LLM two exact, version-pinned choices:
+
+```sh
+npm install --global --ignore-scripts --no-audit --no-fund @poki/cli@AVAILABLE_VERSION
+npm install --save-dev --ignore-scripts --no-audit --no-fund @poki/cli@AVAILABLE_VERSION
+```
+
+The LLM should choose the command matching the installation mode, verify it with `poki --version` or `npx @poki/cli@AVAILABLE_VERSION --version`, and must not replay the command that already completed. The advisory never self-updates the CLI, never blocks the completed command, and follows only npm's stable `latest` tag. Help, version, auth, offline commands, ordinary dry-runs, analytics validation, and the deprecated legacy upload path do not perform the update lookup. Set `POKI_CLI_UPDATE_CHECK=0` to opt out. Run `poki help updates` for the complete machine-readable contract.
+
+## License
+
+The CLI itself is [ISC licensed](LICENSE). The published `bin/index.js` is a bundle that also contains MIT-licensed third-party code; the packages it covers and their required copyright and permission notices are listed at the top of that file.
