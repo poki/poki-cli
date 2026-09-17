@@ -371,7 +371,7 @@ export const gameEventsDocumentation: ResourceDocumentation = {
     field('category', 'string', 'editable', "Frontend Category; backend and CLI field category; 1 through 64 characters and no '/' or '^'."),
     field('action', 'string', 'editable', "Frontend What; legacy backend and CLI field action; 1 through 64 characters and no '/' or '^'."),
     field('label', 'string', 'editable', "Frontend Action; legacy backend and CLI field label; at most 64 characters and no '/' or '^'."),
-    field('description', 'string', 'editable', 'Human-readable purpose, at most 10000 characters; required when creating an event definition.'),
+    field('description', 'string', 'editable', 'Current developer-written measurement description, at most 10000 characters; required on create. Document reporting frequency, measurement window, eligibility, units or buckets, intended denominator, and known exclusions. Free text is accepted; descriptions are shared across versions and do not establish historical behavior.'),
     field('enabled', 'boolean', 'editable', 'Whether analytics exposes the event; the backend creates event definitions with enabled true.'),
     field('include_in_funnel', 'boolean', 'editable', 'Whether funnels may select the event; the backend creates event definitions with include_in_funnel true.'),
     field('created_at', 'timestamp', 'read-only', 'UTC server timestamp at which the event definition was created.'),
