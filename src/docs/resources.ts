@@ -1,3 +1,4 @@
+import { mediaKitAssetTypes } from '../media-kit'
 import { RESOURCE_API_TIME_ZONE } from '../timezones'
 
 export type RelationshipResourceApiType =
@@ -43,6 +44,9 @@ const supplementalDetails: Record<string, {
   input_behavior?: string
   interpretation?: string
 }> = {
+  'media-kit.asset_type': { enum_values: mediaKitAssetTypes, interpretation: 'Normalized alias of marketing_assets.attributes.type; JSON:API resource type remains marketing_assets. Only the seven current types are accepted for new uploads; run poki media-kit types.' },
+  'media-kit.status': { enum_values: ['uploading', 'ready', 'error'] },
+  'media-kit.size': { unit: 'bytes' },
   'games.public_version': { input_behavior: 'Not editable through games update; versions activate changes the public version. tracks remain the authoritative traffic allocation.' },
   'games.annotations': { input_behavior: 'Developer mutations accept only engine. The server preserves existing annotation keys and never removes them.' },
   'games.tracks': { input_behavior: 'Not editable through games update. versions activate replaces the allocation with one public track, and the backend rejects activation while multiple tracks already exist. Weights within each track must total 100.' },
@@ -454,7 +458,31 @@ export const netlibLobbiesDocumentation: ResourceDocumentation = {
   ]
 }
 
+export const mediaKitDocumentation: ResourceDocumentation = {
+  command: 'media-kit',
+  resource: 'Media Kit asset',
+  fields: [
+    field('type', 'string', 'read-only', 'JSON:API resource type: marketing_assets.'),
+    field('id', 'string', 'read-only', 'Stable asset ID.'),
+    field('game_id', 'string', 'read-only', 'Game that owns this asset.'),
+    field('asset_type', 'string enum', 'read-only', 'Asset category, mapped from the backend attributes.type field.'),
+    field('status', 'string enum', 'read-only', 'Processing state: uploading, ready, or error.'),
+    field('error', 'string', 'read-only', 'Processing failure reason, when present.'),
+    field('filename', 'string', 'read-only', 'Original filename.'),
+    field('content_type', 'string', 'read-only', 'File MIME type.'),
+    field('size', 'integer', 'read-only', 'File size in bytes.'),
+    field('width', 'integer|null', 'read-only', 'Image or video width in pixels, when present.'),
+    field('height', 'integer|null', 'read-only', 'Image or video height in pixels, when present.'),
+    field('created_by_id', 'string|null', 'read-only', 'Uploader ID, when present.'),
+    field('game', 'game relationship', 'read-only relationship', 'Owning game, when included.', ['games']),
+    field('created_at', 'timestamp', 'read-only', 'UTC creation timestamp.'),
+    field('updated_at', 'timestamp', 'read-only', 'UTC last update timestamp.')
+  ],
+  references: [{ title: 'Media Kit asset guidelines', url: 'https://poki.notion.site/Media-Kit-Assets-copy-3b51670376c380e1982dea81a6097f9d' }]
+}
+
 export const resourceDocumentationRegistry = [
+  { kind: 'media-kit', apiType: 'marketing_assets', documentation: mediaKitDocumentation },
   { kind: 'games', apiType: 'games', documentation: gamesDocumentation },
   { kind: 'versions', apiType: 'game_versions', documentation: versionsDocumentation },
   { kind: 'version-activations', apiType: 'game_version_activations', documentation: versionActivationsDocumentation },

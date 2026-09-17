@@ -7,6 +7,7 @@ import { apiHarness, authEnvironment, jsonApi, listen, runCli, temporaryDirector
 
 void test('server collection capabilities stay pinned', () => {
   assert.deepEqual(listCapabilities, {
+    mediaKit: { filter: false, sort: false, pagination: false },
     games: { filter: false, sort: true, pagination: true },
     versions: { filter: true, sort: true, pagination: true },
     versionActivations: { filter: false, sort: false, pagination: true },

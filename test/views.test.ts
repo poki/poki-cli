@@ -18,7 +18,7 @@ function fullResource (kind: ResourceListKind): Record<string, unknown> {
 }
 
 void test('every resource kind projects exactly its documented summary fields', () => {
-  assert.equal(kinds.length, 13)
+  assert.equal(kinds.length, 14)
   for (const kind of kinds) {
     const fields = resourceSummaryFields[kind]
     // type and id are part of every documented summary, so projection keeps

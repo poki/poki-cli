@@ -41,7 +41,7 @@ void test('resource documentation keeps structural invariants for every document
       assert.equal(resourceFieldDetails(documentation, field.name)?.encoding, 'unix_seconds', `${documentation.command}.${field.name}`)
     }
     assert.ok(documentation.references.length > 0, documentation.command)
-    assert.ok(documentation.references.every(reference => reference.url.startsWith('https://sdk.poki.com/')), documentation.command)
+    assert.ok(documentation.references.every(reference => reference.url.startsWith('https://sdk.poki.com/') || (documentation.command === 'media-kit' && reference.url === 'https://poki.notion.site/Media-Kit-Assets-copy-3b51670376c380e1982dea81a6097f9d')), documentation.command)
   }
 })
 
