@@ -1,3 +1,5 @@
+import { isRecord } from './json'
+import { mediaKitUploadFailures } from './media-kit'
 import { decodeBearerCredentials, readStoredAuth, refreshStoredAuth } from './auth'
 import { Config } from './config'
 import { authRequired, AUTH_REQUIRED_HINT, CliError, safeApiErrorResponse } from './errors'
@@ -37,6 +39,19 @@ export interface ApiClientDependencies {
 }
 
 export function apiResponseError (status: number, body: unknown, headers: Headers, request: ApiRequest): CliError {
+  if (status === 400 && request.method === 'POST' && /^\/games\/[^/]+\/marketing_assets\/[^/]+$/.test(request.path) &&
+    isRecord(body) && Array.isArray(body.data) && body.data.length === 0 && !('errors' in body)) {
+    const failed = mediaKitUploadFailures(body)
+    if (failed !== undefined && failed.length > 0) {
+      return new CliError('MEDIA_KIT_UPLOAD_REJECTED', 'None of the Media Kit files were accepted.', 4, {
+        status,
+        details: { accepted: [], accepted_ids: [], failed },
+        retryable: false,
+        requestId: headers.get('x-request-id') ?? headers.get('x-cloud-trace-context') ?? undefined,
+        hint: 'Correct the rejected files before uploading them again.'
+      })
+    }
+  }
   const safeDetails = safeApiErrorResponse(body)
   const firstError = safeDetails.errors?.[0]
   const firstErrorCode = firstError?.code

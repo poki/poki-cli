@@ -306,9 +306,7 @@ void test('the public command contract stays developer-only and omits deferred e
   const manifest = JSON.stringify(commandManifest(true))
   assert.doesNotMatch(manifest, /can_[a-z0-9_]*_all(?:_|\b)/i)
   assert.doesNotMatch(manifest, /\badmin(?:istrator|istrative|-only)?\b/i)
-  // Paths alone do not prove absence: a --raw description once documented a
-  // marketing-asset field alias that does not exist on any shipped command.
-  assert.doesNotMatch(manifest, /asset_type|marketing|web-?fit|game-?similarit/i)
+  assert.doesNotMatch(manifest, /web-?fit|game-?similarit/i)
 
   const documentedPermissions = [...new Set([...commandSpecs.values()]
     .flatMap(spec => spec.permission_codes ?? []))].sort()
@@ -316,6 +314,8 @@ void test('the public command contract stays developer-only and omits deferred e
 
   const paths = [...commandSpecs.keys()].join('\n')
   assert.doesNotMatch(paths, /marketing-assets/i)
+  assert.ok(commandSpecs.has('media-kit upload'))
+  assert.ok(commandSpecs.has('media-kit download'))
   assert.doesNotMatch(paths, /(?:^|\s)(?:thumbnail-)?ab-tests?(?:\s|$)/i)
   assert.doesNotMatch(paths, /web-?fit/i)
   assert.doesNotMatch(paths, /game-?similarit/i)

@@ -1,3 +1,4 @@
+import { addMediaKitCommandSpecs } from './command-groups/media-kit'
 import { resourceDocumentations } from './resources'
 import { ANALYTICS_TIME_ZONE, RESOURCE_API_TIME_ZONE } from '../timezones'
 import { tableCatalog } from '../data/catalog'
@@ -318,7 +319,7 @@ const commandSpecBuilder: CommandSpecBuilder = {
 
 add({
   path: [],
-  summary: 'Manage Poki for Developers resources and analytics with contracts designed for automation and LLMs.',
+  summary: 'Manage Poki for Developers resources and analytics.',
   behavior: [
     'Use poki help --all for the compact manifest and poki help --search TEXT for discovery. Reference topics: poki help permissions, formats, shapes, workflows, and updates.',
     'Game-scoped commands use project game_id or --game.',
@@ -384,6 +385,7 @@ addGameEventCommandSpecs(commandSpecBuilder)
 addGameEventFunnelCommandSpecs(commandSpecBuilder)
 addPlayerFeedbackQuestionCommandSpecs(commandSpecBuilder)
 addNetlibLobbyCommandSpecs(commandSpecBuilder)
+addMediaKitCommandSpecs(commandSpecBuilder)
 
 addDataCommandSpecs(commandSpecBuilder)
 

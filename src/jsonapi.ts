@@ -219,7 +219,9 @@ function normalizeResource (
   try {
     const output = { ...identity }
     if (isRecord(resource.attributes)) {
-      for (const [field, value] of Object.entries(resource.attributes)) {
+      for (const [attribute, value] of Object.entries(resource.attributes)) {
+        if (type === 'marketing_assets' && attribute === 'asset_type') continue
+        const field = type === 'marketing_assets' && attribute === 'type' ? 'asset_type' : attribute
         const definition = developerResourceField(type, field)
         if (definition === undefined) continue
         // Identity and relationships must come from their JSON:API containers;
@@ -301,7 +303,7 @@ export function unreadableFields (
     // An unusable container hides which fields the response declared, so every
     // requested field is unknown rather than proven absent.
     if (!containersAreReadable) return true
-    return declaresField(raw.attributes, field) || declaresField(raw.relationships, field)
+    return declaresField(raw.attributes, raw.type === 'marketing_assets' && field === 'asset_type' ? 'type' : field) || declaresField(raw.relationships, field)
   })
 }
 

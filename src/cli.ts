@@ -1,3 +1,4 @@
+import { registerMediaKitCommands } from './commands/media-kit'
 import yargs, { Argv } from 'yargs'
 
 import { ApiClient } from './api'
@@ -285,6 +286,7 @@ export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
   cli = registerAuthCommands(cli)
   cli = registerAudienceCommands(cli)
   cli = registerDiscoveryCommands(cli, api)
+  cli = registerMediaKitCommands(cli, api)
   cli = registerGameCommands(cli, api)
   cli = registerVersionCommands(cli, api)
   cli = registerVersionActivationCommands(cli, api)

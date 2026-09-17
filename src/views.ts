@@ -5,6 +5,7 @@ import { isRecord } from './json'
 export type { ResourceListKind } from './developer-surface'
 
 export const resourceSummaryFields: Record<ResourceListKind, readonly string[]> = {
+  'media-kit': ['type', 'id', 'game_id', 'asset_type', 'status', 'filename', 'size', 'error'],
   games: ['type', 'id', 'title', 'team_id', 'approved', 'public_version', 'updated_at'],
   versions: ['type', 'id', 'game_id', 'filename', 'label', 'state', 'progress', 'archived_at', 'activated_at', 'url', 'created_at'],
   'version-activations': ['type', 'id', 'game_id', 'version_id', 'activated_at', 'deactivated_at', 'activated_by'],

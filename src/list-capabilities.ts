@@ -8,6 +8,7 @@ export interface ListCapabilities {
 // yargs declarations, request builder, and structured help so unsupported
 // options cannot be advertised or silently sent to handlers that ignore them.
 export const listCapabilities = {
+  mediaKit: { filter: false, sort: false, pagination: false },
   games: { filter: false, sort: true, pagination: true },
   versions: { filter: true, sort: true, pagination: true },
   versionActivations: { filter: false, sort: false, pagination: true },
