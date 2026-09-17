@@ -17,7 +17,7 @@ export const resourceSummaryFields: Record<ResourceListKind, readonly string[]> 
   'player-fit-tests': ['type', 'id', 'game_id', 'version_id', 'status', 'gameplays', 'target_gameplays', 'engagement', 'stopped_at', 'created_at'],
   reviews: ['type', 'id', 'version', 'status', 'queue_time', 'seen_by_developer', 'report_submitted_at', 'created_by', 'created_at'],
   'game-change-requests': ['type', 'id', 'game_id', 'game', 'status', 'title', 'thumbnail_url', 'created_by', 'reviewed_by', 'created_at'],
-  'game-events': ['type', 'id', 'game_id', 'category', 'action', 'label', 'enabled', 'include_in_funnel', 'created_at', 'updated_at'],
+  'game-events': ['type', 'id', 'game_id', 'category', 'action', 'label', 'description', 'enabled', 'include_in_funnel', 'created_at', 'updated_at'],
   'game-event-funnels': ['type', 'id', 'game_id', 'team_id', 'title', 'created_by_id', 'created_at', 'updated_at'],
   'player-feedback-questions': ['type', 'id', 'game_id', 'team_id', 'created_by_id', 'status', 'start_date', 'end_date', 'feedback_message_types', 'feedback_count', 'error', 'model', 'created_at', 'updated_at'],
   'netlib-lobbies': ['type', 'id', 'code', 'peer_count', 'ghosts', 'max_players', 'public', 'has_password', 'updated_at', 'created_at']

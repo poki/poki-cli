@@ -140,6 +140,11 @@ void test('data query supports JSON and TOON stdin plus decoded CSV', async t =>
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   const { env } = await apiHarness(t, async (req, res) => {
     const body = await requestBody(req)
+    if (body.from === 'table_update_times') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ total: 1, header: ['table_name', 'last_updated_at'], rows: [{ table_name: 'dbt_p4d_gameplays', last_updated_at: '2026-09-17 09:00:00' }] }))
+      return
+    }
     assert.equal(body.from, 'dbt_p4d_gameplays')
     if (req.url === '/_data?csv=') {
       res.writeHead(200, { 'Content-Type': 'text/csv;base64' })
@@ -206,7 +211,7 @@ void test('data query supports JSON and TOON stdin plus decoded CSV', async t =>
         source: 'dbt_p4d_gameplays',
         requested: { limit: 10000, offset: 0 },
         returned: { rows: 1, total_rows: 1 },
-        completeness: { complete: true, has_more: false, omitted_before_offset: false },
+        completeness: { scope: 'result_rows', ingestion_completeness: 'unknown', complete: true, has_more: false, omitted_before_offset: false },
         time_zone: 'Europe/Amsterdam',
         semantic_validation: { status: 'passed', contract_version: 1 },
         interpretation: {
@@ -229,12 +234,15 @@ void test('data query supports JSON and TOON stdin plus decoded CSV', async t =>
           notes: [],
           warnings: []
         },
-        freshness: { status: 'not_checked', command: 'poki data freshness' },
-        warnings: [{
-          code: 'FRESHNESS_NOT_CHECKED',
-          message: 'This query result does not establish source freshness; run poki data freshness separately.',
-          blocking: false
-        }]
+        freshness: {
+          source: 'dbt_p4d_gameplays',
+          time_zone: 'Europe/Amsterdam',
+          interpretation: 'Latest successful table refresh observed separately after the analytics query; not a transactional snapshot or proof that all events have been ingested.',
+          command: 'poki data freshness',
+          status: 'checked',
+          last_updated_at: '2026-09-17 09:00:00'
+        },
+        warnings: []
       }
     }
   })
@@ -351,7 +359,7 @@ void test('unsafe event gameplay rollups fail locally in every query mode and sa
   assert.match(eventEvidence.interpretation.notes[0].message, /label field is normalized to an empty string/i)
   assert.equal(eventEvidence.interpretation.warnings[0].code, 'DISTINCT_COUNT_GRAIN')
   assert.match(eventEvidence.interpretation.warnings[0].message, /multiple event keys.*unique cross-key total is unavailable/i)
-  assert.equal(requests, 1)
+  assert.equal(requests, 2)
 
   const lifecycle = await runCli([
     'data', 'run', 'game-event-starts-export',
@@ -364,7 +372,7 @@ void test('unsafe event gameplay rollups fail locally in every query mode and sa
   ], { env })
   assert.equal(lifecycle.code, 0, lifecycle.stderr)
   assert.deepEqual(JSON.parse(lifecycle.stdout).query.where.expressions[4], ['label', '==', ''])
-  assert.equal(requests, 1)
+  assert.equal(requests, 2)
 })
 
 void test('unknown tables, joins, and columns fail closed before execution or validate-only', async t => {
@@ -439,7 +447,8 @@ void test('data query preserves an exact signed 64-bit funnel hash string in the
   const { env } = await apiHarness(t, async (req, res) => {
     assert.equal(req.method, 'POST')
     assert.equal(req.url, '/_data')
-    postedBody = await requestBody(req)
+    const body = await requestBody(req)
+    if (body.from !== 'table_update_times') postedBody = body
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ total: 0, header: ['event_hashes'], rows: [] }))
   }, 'data-hash')
@@ -551,7 +560,7 @@ void test('analytics evidence exposes partial windows and malformed responses fa
   const evidence = JSON.parse(partial.stdout).meta.evidence
   assert.deepEqual(evidence.requested, { limit: 2, offset: 1 })
   assert.deepEqual(evidence.returned, { rows: 2, total_rows: 5 })
-  assert.deepEqual(evidence.completeness, { complete: false, has_more: true, omitted_before_offset: true })
+  assert.deepEqual(evidence.completeness, { scope: 'result_rows', ingestion_completeness: 'unknown', complete: false, has_more: true, omitted_before_offset: true })
   assert.deepEqual(evidence.query, JSON.parse(query))
 
   malformed = 'total'
@@ -601,7 +610,7 @@ void test('an ungrouped aggregate is complete even when the reported total count
   assert.equal(result.code, 0, result.stderr)
   const evidence = JSON.parse(result.stdout).meta.evidence
   assert.deepEqual(evidence.returned, { rows: 1, total_rows: 48211 })
-  assert.deepEqual(evidence.completeness, { complete: true, has_more: false, omitted_before_offset: false })
+  assert.deepEqual(evidence.completeness, { scope: 'result_rows', ingestion_completeness: 'unknown', complete: true, has_more: false, omitted_before_offset: false })
   assert.equal(evidence.interpretation.selected_measure_contracts[0].output, 'play_time_seconds')
   assert.deepEqual(evidence.interpretation.selected_measure_contracts[0].source, { table: 'dbt_p4d_engagement_per_gameplay', field: 'play_time' })
 
@@ -610,6 +619,8 @@ void test('an ungrouped aggregate is complete even when the reported total count
   const partial = await runCli(['data', 'query', '--query', bounded, '--format', 'json'], { env })
   assert.equal(partial.code, 0, partial.stderr)
   assert.deepEqual(JSON.parse(partial.stdout).meta.evidence.completeness, {
+    scope: 'result_rows',
+    ingestion_completeness: 'unknown',
     complete: false,
     has_more: true,
     omitted_before_offset: false
@@ -629,7 +640,7 @@ void test('freshness evidence requires a returned timestamp column rather than o
       res.end(JSON.stringify({
         total: 1,
         header: ['table_name', timestampOutput],
-        rows: [{ table_name: 'dbt_p4d_gameplays', [timestampOutput]: '2026-08-13 09:00:00' }]
+        rows: [{ table_name: 'dbt_p4d_gameplays', [timestampOutput]: '2026-08-13T09:00:00+02:00' }]
       }))
       return
     }

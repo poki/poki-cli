@@ -73,7 +73,7 @@ function withEventMutation (yargs: Argv, projectGameId: string | undefined, crea
     .option('category', { describe: "Frontend Category; backend field category; 1-64 characters and no '/' or '^'", type: 'string' })
     .option('action', { describe: "Frontend What; legacy backend field action; 1-64 characters and no '/' or '^'", type: 'string' })
     .option('label', { describe: "Frontend Action; legacy backend field label; 0-64 characters and no '/' or '^'", type: 'string' })
-    .option('description', { describe: create ? 'Required human-readable purpose' : 'Human-readable purpose', type: 'string' })
+    .option('description', { describe: `${create ? 'Required measurement description' : 'Measurement description'}; document frequency, window, eligibility, units/buckets, denominator, and exclusions; shared across versions`, type: 'string' })
   if (!create) {
     command = command
       .option('enabled', { describe: 'Whether analytics should expose the event', type: 'boolean' })

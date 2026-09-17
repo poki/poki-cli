@@ -6,6 +6,7 @@ import { findTable, SEMANTIC_CONTRACT_VERSION, tableCatalog, type AggregationKin
 import { dataRecipes, fillRecipe, findRecipe, recipeNamesForTable, recipeParameterNames, recipePlaceholders, type DataRecipe } from '../data/examples'
 import { describeQueryTopic, includeResourceTypes, joinPolicy, queryDescription, queryTopics, resolvedSelectOutputName, validateDataQuery } from '../data/grammar'
 import { dataMetrics, findMetric } from '../data/metrics'
+import { isAnalyticsTimestamp, readEventDefinitions, readSourceFreshness } from '../data/evidence'
 import { visitSelectExpression } from '../data/select-expression'
 import { validateDataQuerySemantics } from '../data/semantics'
 import { CliError, inputError } from '../errors'
@@ -270,7 +271,21 @@ function resultInterpretation (query: Record<string, unknown>): Record<string, u
   }
 }
 
-function normalizeDataResult (body: unknown, query: Record<string, unknown>, recipeName?: string): unknown {
+interface AnalyticsResult {
+  total: number
+  header: string[]
+  rows: Array<Record<string, unknown>>
+  included?: unknown
+  meta: {
+    evidence: Record<string, unknown> & {
+      interpretation: Record<string, unknown>
+      freshness: Record<string, unknown>
+      warnings: Array<{ code: string, message: string, blocking: boolean }>
+    }
+  }
+}
+
+function normalizeDataResult (body: unknown, query: Record<string, unknown>, recipeName?: string): AnalyticsResult {
   if (!isRecord(body)) throw invalidAnalyticsResponse('The analytics response was not an object.', body)
   if (typeof body.total !== 'number' || !Number.isInteger(body.total) || body.total < 0 || !Array.isArray(body.header) || body.header.some(column => typeof column !== 'string') || new Set(body.header).size !== body.header.length || !Array.isArray(body.rows) || body.rows.some(row => !isRecord(row))) {
     throw invalidAnalyticsResponse('The analytics response must contain total, header, and rows.', body)
@@ -292,7 +307,7 @@ function normalizeDataResult (body: unknown, query: Record<string, unknown>, rec
   // only a full window can have more behind it.
   const hasMore = returnedRows >= limit && offset + returnedRows < totalRows
   const freshnessColumn = freshnessOutputColumn(query)
-  const freshnessReturned = freshnessColumn !== undefined && header.includes(freshnessColumn) && normalizedRows.length > 0 && normalizedRows.every(row => typeof row[freshnessColumn] === 'string' && String(row[freshnessColumn]).trim() !== '')
+  const freshnessReturned = freshnessColumn !== undefined && header.includes(freshnessColumn) && normalizedRows.length > 0 && normalizedRows.every(row => isAnalyticsTimestamp(row[freshnessColumn]))
   const warnings: Array<{ code: string, message: string, blocking: boolean }> = []
   if (!freshnessReturned) {
     warnings.push({
@@ -314,6 +329,8 @@ function normalizeDataResult (body: unknown, query: Record<string, unknown>, rec
         requested: { limit, offset },
         returned: { rows: returnedRows, total_rows: totalRows },
         completeness: {
+          scope: 'result_rows',
+          ingestion_completeness: 'unknown',
           // Completeness is "started at the beginning and nothing follows", not
           // "row count equals the reported total": the latter is false for
           // every aggregate whose total counts source rows.
@@ -415,7 +432,21 @@ async function executeQuery (
     process.stdout.write(csv.endsWith('\n') ? csv : `${csv}\n`)
     return
   }
-  writeStructured(normalizeDataResult(response.body, query, recipeName), structuredFormat(argv.format))
+  const result = normalizeDataResult(response.body, query, recipeName)
+  const [freshness, events] = await Promise.all([
+    query.from === 'table_update_times' ? undefined : readSourceFreshness(api, String(query.from), argv),
+    readEventDefinitions(api, query, result.rows, argv)
+  ])
+  const evidence = result.meta.evidence
+  if (freshness !== undefined) {
+    evidence.freshness = freshness.data
+    evidence.warnings = evidence.warnings.filter(warning => warning.code !== 'FRESHNESS_NOT_CHECKED').concat(freshness.warnings)
+  }
+  if (events !== undefined) {
+    evidence.interpretation.event_definitions = events.data
+    evidence.warnings.push(...events.warnings)
+  }
+  writeStructured(result, structuredFormat(argv.format))
 }
 
 // One calendar day in milliseconds; date arithmetic happens on UTC-noon
