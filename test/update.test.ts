@@ -420,7 +420,7 @@ void test('offline, auth, preview, validation, and legacy invocations never run 
     { args: ['--version'] },
     { args: ['context', '--format', 'json'], cwd: project },
     { args: ['audiences', 'list', '--format', 'json'] },
-    { args: ['games', 'create', '--title', 'Example', '--team', 'team-1', '--dry-run', '--format', 'json'] },
+    { args: ['games', 'update', 'game-1', '--engine', 'unity', '--dry-run', '--format', 'json'] },
     { args: ['data', 'run', 'game-users', '--team', 'team-1', '--game', 'game-1', '--last-days', '7', '--validate-only', '--format', 'json'] },
     { args: ['auth', 'status', '--format', 'json'] },
     { args: ['auth', 'login', '--format', 'json'] },

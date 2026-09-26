@@ -124,8 +124,8 @@ export const gamesDocumentation: ResourceDocumentation = {
   fields: [
     field('type', 'string', 'read-only', 'JSON:API resource type; normally games.'),
     field('id', 'string', 'read-only', 'Stable Poki for Developers game ID.'),
-    field('title', 'string', 'create-only; change-request-only afterward', 'Game title, between 3 and 128 characters. Developer updates are rejected; use game-change-requests create after creation.'),
-    field('team_id', 'string', 'create-only', 'ID of the team that owns the game. Developers select it on create but cannot reassign an existing game.'),
+    field('title', 'string', 'read-only; change-request-only', 'Game title, between 3 and 128 characters. New games can ONLY be created manually in Poki for Developers; use game-change-requests create to request title changes.'),
+    field('team_id', 'string', 'read-only', 'ID of the team that owns the game. Select it when creating the game manually in Poki for Developers; existing games cannot be reassigned through the CLI.'),
     field('uploader_id', 'string', 'read-only', 'ID of the user who originally uploaded or created the game.'),
     field('public_version', 'string', 'read-only', 'Version ID currently selected as public; use versions activate for the supported developer activation workflow.'),
     field('approved', 'boolean', 'read-only', 'Whether the game is approved; developers can read but not change this value.'),

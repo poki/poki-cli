@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { encode } from '@toon-format/toon'
 import { createServer } from 'node:http'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -477,30 +476,6 @@ void test('mutation adapters build constrained JSON:API documents and enforce de
     res.end()
   }, 'mutations')
 
-  const create = await runCli(['games', 'create', '--data', '-', '--format', 'json'], {
-    env,
-    stdin: encode({ title: 'Created', team_id: 'team-1', annotations: { engine: 'pixijs' } })
-  })
-  assert.equal(create.code, 0, create.stderr)
-  assert.deepEqual(bodies.get('POST /games'), {
-    data: {
-      type: 'games',
-      attributes: { title: 'Created', annotations: { engine: 'pixijs' } },
-      relationships: { team: { data: { type: 'teams', id: 'team-1' } } }
-    }
-  })
-
-  for (const args of [
-    ['--title', 'Created', '--team', 'team-1', '--thumbnail', 'not-applied'],
-    ['--data', '{"title":"Created","team_id":"team-1","thumbnail":"not-applied"}']
-  ]) {
-    const before = mutationRequests
-    const rejectedThumbnail = await runCli(['games', 'create', ...args, '--format', 'json'], { env })
-    assert.equal(rejectedThumbnail.code, 2, rejectedThumbnail.stderr)
-    assert.equal(JSON.parse(rejectedThumbnail.stderr).error.code, 'INVALID_INPUT')
-    assert.equal(mutationRequests, before, args.join(' '))
-  }
-
   const update = await runCli(['games', 'update', 'game-1', '--engine', 'phaser-3', '--format', 'json'], { env })
   assert.equal(update.code, 0, update.stderr)
   const gameUpdate = bodies.get('PATCH /games/game-1') as unknown as { data: { attributes: { annotations: Record<string, string> } } }
@@ -712,10 +687,10 @@ void test('--dry-run previews the resolved mutation without contacting the API',
     res.end()
   }, 'dry-run')
 
-  const create = await runCli(['games', 'create', '--title', 'Example', '--team', 'Y', '--dry-run', '--format', 'json'], { env })
-  assert.equal(create.code, 0, create.stderr)
-  assert.equal(create.stderr, '')
-  const preview = JSON.parse(create.stdout)
+  const update = await runCli(['games', 'update', 'game-1', '--engine', 'unity', '--dry-run', '--format', 'json'], { env })
+  assert.equal(update.code, 0, update.stderr)
+  assert.equal(update.stderr, '')
+  const preview = JSON.parse(update.stdout)
   assert.deepEqual(preview, {
     dry_run: true,
     contacted_api: false,
@@ -728,13 +703,13 @@ void test('--dry-run previews the resolved mutation without contacting the API',
     },
     executable: 'unknown',
     request: {
-      method: 'POST',
-      path: '/games',
+      method: 'PATCH',
+      path: '/games/game-1',
       body: {
         data: {
           type: 'games',
-          attributes: { title: 'Example' },
-          relationships: { team: { data: { type: 'teams', id: 'Y' } } }
+          attributes: { annotations: { engine: 'unity' } },
+          id: 'game-1'
         }
       }
     },
@@ -744,10 +719,6 @@ void test('--dry-run previews the resolved mutation without contacting the API',
     side_effects: preview.side_effects
   })
   assert.ok(Array.isArray(preview.side_effects) && preview.side_effects.length > 0)
-
-  const invalid = await runCli(['games', 'create', '--title', 'X', '--team', 'Y', '--dry-run', '--format', 'json'], { env })
-  assert.equal(invalid.code, 2)
-  assert.match(JSON.parse(invalid.stderr).error.message, /3 through 128 characters/)
 
   const shortUnicodeTitle = await runCli(['game-change-requests', 'create', '--game', 'game-1', '--title', '😀😀', '--dry-run', '--format', 'json'], { env })
   assert.equal(shortUnicodeTitle.code, 2)
@@ -1235,4 +1206,32 @@ void test('game-change-requests get --raw returns the filtered backend document 
   assert.deepEqual(body.data[0].attributes, { status: 'pending' })
   assert.equal(body.meta.total, 1)
   assert.equal(requests, 1)
+})
+
+void test('game creation always directs users to the manual workflow without contacting the API', async t => {
+  let requests = 0
+  const { env } = await apiHarness(t, (_req, res) => {
+    requests++
+    res.writeHead(500)
+    res.end()
+  }, 'manual-game-creation')
+
+  for (const args of [
+    [],
+    ['--title', 'Example', '--team', 'team-1'],
+    ['--title', 'X', '--team', 'team-1', '--dry-run'],
+    ['--data', '@missing-game.json'],
+    ['--data', '-'],
+    ['--data', '{invalid json', '--yes', '--raw'],
+    ['--thumbnail', 'old-input']
+  ]) {
+    const result = await runCli(['games', 'create', ...args, '--format', 'json'], { env })
+    assert.equal(result.code, 2, result.stderr)
+    assert.equal(result.stdout, '')
+    const error = JSON.parse(result.stderr).error
+    assert.equal(error.code, 'GAME_CREATION_UNSUPPORTED', `${args.join(' ')}: ${result.stderr}`)
+    assert.match(error.message, /New games can ONLY be created manually in Poki for Developers/)
+    assert.equal(error.retryable, false)
+  }
+  assert.equal(requests, 0)
 })

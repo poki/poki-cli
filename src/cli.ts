@@ -265,7 +265,7 @@ export function registerBuiltinCommands (cli: Argv, args: string[]): Argv {
     .command('version', 'Print the poki-cli version', version => version, () => {
       process.stdout.write(`${CLI_VERSION}\n`)
     })
-    .command('help [command..]', 'Show help for a command path such as `poki help games create`', help => help
+    .command('help [command..]', 'Show help for a command path such as `poki help games get`', help => help
       .positional('command', { describe: 'Nested command path', type: 'string', array: true })
       .option('all', { describe: 'Return a compact manifest for every command', type: 'boolean' })
       .option('full', { describe: 'With --all, include each command\'s complete input schema', type: 'boolean' })

@@ -3,7 +3,7 @@ import type { Argv } from 'yargs'
 import { ApiClient } from '../api'
 import { gamesDocumentation } from '../docs/resources'
 import { CliError, inputError } from '../errors'
-import { characterCount, containsZeroWidthCharacter, requireChanges } from '../input'
+import { characterCount, requireChanges } from '../input'
 import { jsonApiDocument, unreadableFields, unreadableFieldsReport } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
 import { getProjectGameId, projectConfigError } from '../project'
@@ -15,7 +15,6 @@ import {
   gamePath,
   getResource,
   listResources,
-  MutationInputFields,
   mutationInputFields,
   render,
   renderList,
@@ -24,27 +23,19 @@ import {
   requireExpectedJsonApiResource,
   resolveMutationInput,
   withDataOption,
+  withFormatOption,
   withListOptions,
   withMutationOptions,
   withOutputOptions,
   withRequestOptions
 } from './common'
 
-const createInput = mutationInputFields({
-  title: 'title',
-  team: 'team_id',
+const updateInput = mutationInputFields({
   engine: 'annotations',
   privacyPolicyUrl: 'privacy_policy_url',
   suggestedDescription: 'suggested_description',
   suggestedCategory: 'suggested_categories'
 })
-
-// Update accepts the same field flags - a flag still conflicts with --data on
-// both commands - but cannot retitle a game or move it between teams.
-const updateInput: MutationInputFields = {
-  flags: createInput.flags,
-  fields: createInput.fields.filter(field => field !== 'title' && field !== 'team_id')
-}
 
 function validateAnnotations (value: unknown): void {
   if (value === undefined) return
@@ -66,14 +57,6 @@ function validateGameMutationData (data: Record<string, unknown>): void {
   for (const field of ['suggested_description', 'suggested_categories'] as const) {
     if (data[field] !== undefined && typeof data[field] !== 'string') throw inputError(`${field} must be a string.`)
   }
-  if (data.title !== undefined) {
-    if (typeof data.title !== 'string') throw inputError('title must be a string.')
-    const length = characterCount(data.title)
-    if (length < 3 || length > 128) throw inputError('title must contain 3 through 128 characters.')
-    if (data.title.trim() !== data.title) throw inputError('title must not have leading or trailing whitespace.')
-    if (containsZeroWidthCharacter(data.title)) throw inputError('title must not contain zero-width characters.')
-  }
-
   if (data.privacy_policy_url !== undefined) {
     if (typeof data.privacy_policy_url !== 'string') throw inputError('privacy_policy_url must be a string.')
     if (characterCount(data.privacy_policy_url) > 255) throw inputError('privacy_policy_url must contain at most 255 characters.')
@@ -112,8 +95,6 @@ function unreadableReadinessFields (resource: ExpectedJsonApiResourceResult, typ
 function gameFlags (argv: Record<string, unknown>): Record<string, unknown> {
   const data: Record<string, unknown> = {}
   const mappings: Array<[string, string]> = [
-    ['title', 'title'],
-    ['team', 'team_id'],
     ['privacyPolicyUrl', 'privacy_policy_url'],
     ['suggestedDescription', 'suggested_description']
   ]
@@ -130,17 +111,16 @@ function gameFlags (argv: Record<string, unknown>): Record<string, unknown> {
 }
 
 async function mutationData (
-  argv: Record<string, unknown>,
-  input: MutationInputFields
+  argv: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const data = await resolveMutationInput(argv, input, () => gameFlags(argv))
+  const data = await resolveMutationInput(argv, updateInput, () => gameFlags(argv))
   validateAnnotations(data.annotations)
   validateGameMutationData(data)
   return data
 }
 
-function withGameFieldOptions (yargs: Argv, create: boolean): Argv {
-  let command = withDataOption(withMutationOptions(withOutputOptions(yargs)), 'JSON or TOON object, @file, or - for stdin; mutually exclusive with field flags')
+function withGameFieldOptions (yargs: Argv): Argv {
+  return withDataOption(withMutationOptions(withOutputOptions(yargs)), 'JSON or TOON object, @file, or - for stdin; mutually exclusive with field flags')
     .option('engine', {
       describe: 'Developer-editable engine annotation: 2-32 lowercase letters, digits, or hyphens; the server preserves every other annotation',
       type: 'string'
@@ -158,19 +138,6 @@ function withGameFieldOptions (yargs: Argv, create: boolean): Argv {
       type: 'array',
       string: true
     })
-
-  if (create) {
-    command = command
-      .option('title', {
-        describe: 'Game title (required without --data)',
-        type: 'string'
-      })
-      .option('team', {
-        describe: 'Owning team ID (required without --data)',
-        type: 'string'
-      })
-  }
-  return command
 }
 
 export function registerGameCommands (yargs: Argv, api: ApiClient): Argv {
@@ -194,7 +161,7 @@ export function registerGameCommands (yargs: Argv, api: ApiClient): Argv {
     type: 'string'
   })
 
-  return yargs.command('games', 'List, inspect, assess readiness, create, and update Poki for Developers games', games => registerResourceDiscovery(games, gamesDocumentation)
+  return yargs.command('games', 'List, inspect, assess readiness, and update Poki for Developers games', games => registerResourceDiscovery(games, gamesDocumentation)
     .command('list', 'List games for --team or the authenticated user\'s first team', list => withListOptions(list, listCapabilities.games, 'games')
       .option('team', {
         describe: 'Only return games owned by this team ID',
@@ -248,27 +215,18 @@ export function registerGameCommands (yargs: Argv, api: ApiClient): Argv {
         }
       }, argv)
     })
-    .command('create', 'Create a game for a team', create => withGameFieldOptions(create, true), async argv => {
-      const data = await mutationData(argv, createInput)
-      if (typeof data.title !== 'string' || data.title === '') throw inputError('title is required.')
-      if (typeof data.team_id !== 'string' || data.team_id === '') throw inputError('team_id is required.')
-
-      const teamID = data.team_id
-      const attributes = { ...data }
-      delete attributes.team_id
-      const body = jsonApiDocument('games', attributes, undefined, {
-        team: { type: 'teams', id: teamID }
-      })
-      await renderMutation(api, argv, { method: 'POST', path: '/games', body, expected: { type: 'games' }, behavior: { sideEffects: ['Creates a game and may trigger stage, audit, watch, and notification workflows.'] } })
+    // Accept legacy arguments so every old invocation gets the manual workflow guidance.
+    .command('create', 'New games can ONLY be created manually in Poki for Developers', create => withFormatOption(create).strictOptions(false).strictCommands(false), () => {
+      throw new CliError('GAME_CREATION_UNSUPPORTED', 'New games can ONLY be created manually in Poki for Developers. Game creation is not available through the CLI.', 2)
     })
-    .command('update [game-id]', 'Update editable game settings; defaults to the configured project game', update => gameFlag(withGameFieldOptions(update, false))
+    .command('update [game-id]', 'Update editable game settings; defaults to the configured project game', update => gameFlag(withGameFieldOptions(update))
       .positional('game-id', { describe: 'Poki for Developers game ID; defaults to project game_id', type: 'string' }), async argv => {
-      const data = await mutationData(argv, updateInput)
+      const data = await mutationData(argv)
       const gameID = selectedGame(argv)
       requireChanges(data)
       const path = gamePath(gameID)
       const body = jsonApiDocument('games', data, gameID)
       await renderMutation(api, argv, { method: 'PATCH', path, body, expected: { type: 'games', id: gameID }, behavior: { sideEffects: ['May create audit or notification activity.'] } })
     })
-    .demandCommand(1, 'Choose games list, games get, games readiness, games create, or games update.'), () => {})
+    .demandCommand(1, 'Choose games list, games get, games readiness, or games update.'), () => {})
 }

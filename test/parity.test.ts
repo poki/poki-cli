@@ -364,7 +364,9 @@ void test('a token following a single-value option is not swallowed', async () =
     const spec = commandSpecs.get(key)
     assert.ok(spec !== undefined, key)
     const value = SAMPLE_VALUES.get(`--${name}`) ?? '1'
-    const args = [...requiredInvocation(spec), `--${name}`, value, 'SWALLOWED_TOKEN']
+    // Fill optional positionals too, so the extra token cannot be a valid argument.
+    const optionalArguments = (spec.arguments ?? []).filter(argument => !argument.required).map(argument => argument.values?.[0] ?? 'SAMPLE_ID')
+    const args = [...requiredInvocation(spec), ...optionalArguments, `--${name}`, value, 'SWALLOWED_TOKEN']
     const result = await runCli(args)
     const label = `'poki ${args.join(' ')}' (--${name} declared by 'poki ${key}')`
     assert.ok(record.options.has(name), label)

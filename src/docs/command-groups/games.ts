@@ -1,8 +1,8 @@
 import { listCapabilities } from '../../list-capabilities'
 import type { CommandSpecBuilder } from './types'
 
-export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDiscovery, dataOption, example, gameOption, group, listOptionsFor, mutationOptions, option, outputOptions, requestOptions }: CommandSpecBuilder): void {
-  group('games', 'List, inspect, assess readiness, create, and update games.')
+export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDiscovery, dataOption, example, formatOption, gameOption, group, listOptionsFor, mutationOptions, option, outputOptions, requestOptions }: CommandSpecBuilder): void {
+  group('games', 'List, inspect, assess readiness, and update games.')
   const gameFieldOptions = [
     option('--engine', 'string', 'Developer-editable engine annotation: 2-32 lowercase letters, digits, or hyphens; the server preserves every other annotation.'),
     option('--privacy-policy-url', 'string', 'Public privacy-policy URL.'),
@@ -33,7 +33,7 @@ export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDis
     output: { default_format: 'toon', formats: ['toon', 'json'], shape: '{data: {type: game_readiness, game, operations}, meta: {scope, excluded, point_in_time, backend_authoritative, limitations, requests}}' },
     examples: [example('poki games readiness --format json', 'Discover backend-compatible version candidates and machine-readable blockers for the project game.')]
   })
-  apiAction(['games', 'create'], 'Create a game for a team.', { method: 'POST', path: '/games', contacts_api: true }, ['can_create_owned_games'], { options: [option('--title', 'string', 'Required unless supplied by --data.', { required: 'unless --data' }), option('--team', 'string', 'Required owner team ID unless supplied by --data.', { required: 'unless --data' }), ...gameFieldOptions, dataOption, ...mutationOptions], scope: '--team or team_id in --data; see poki whoami for your team ID', behavior: ['annotations accepts only the developer-editable engine key; the server rejects every other annotation key.', 'A thumbnail cannot be set during game creation; create the game first, then use game-change-requests create.', gameDataShapeBehavior], side_effects: ['Creates a game and triggers normal server workflows.'], missing_input: 'game fields or --data', examples: [example('poki games create --title "My Game" --team TEAM_ID --dry-run', 'Validate and inspect the create request before sending it.')] })
+  add({ path: ['games', 'create'], summary: 'New games can ONLY be created manually in Poki for Developers.', options: [formatOption], behavior: ['New games can ONLY be created manually in Poki for Developers. Game creation is not available through the CLI.', 'Always exits with GAME_CREATION_UNSUPPORTED (exit 2), including with legacy flags, --data, or --dry-run. Does not read input data or contact the API.'], network: { method: 'none', path: 'none', contacts_api: false }, risk: 'offline' })
   apiAction(
     ['games', 'update'],
     'Update developer-editable game fields; positional ID defaults to project game_id.',
