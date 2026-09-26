@@ -5,7 +5,6 @@
 export const developerPermissionCatalog = [
   { code: 'can_activate_approved_versions', description: 'Activate a completed version with an approved review when direct traffic-track editing is unavailable.' },
   { code: 'can_create_owned_game_change_requests', description: 'Request supported title, thumbnail, or content-security-policy changes for a game belonging to the current user or team.' },
-  { code: 'can_create_owned_games', description: 'Create a game for the current user’s team.' },
   { code: 'can_create_owned_player_feedback_question', description: 'Queue a generated player-feedback question for a game belonging to the current user or team.' },
   { code: 'can_create_owned_reviews', description: 'Request a review for a version belonging to the current user or team.' },
   { code: 'can_create_owned_versions', description: 'Create or upload a version for a game belonging to the current user or team.' },

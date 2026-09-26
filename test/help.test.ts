@@ -449,10 +449,8 @@ void test('help forms and missing-input errors agree end-to-end (spot check)', a
   assert.equal(incomplete.code, 2, incomplete.stdout)
   assert.equal(incomplete.stdout, '')
   const error = JSON.parse(incomplete.stderr).error
-  assert.equal(error.code, 'MISSING_INPUT')
-  assert.match(error.message, /game fields or --data/)
-  assert.equal(typeof error.hint, 'string')
-  assert.deepEqual(error.details.help, helpDocument(['games', 'create']))
+  assert.equal(error.code, 'GAME_CREATION_UNSUPPORTED')
+  assert.match(error.message, /New games can ONLY be created manually in Poki for Developers/)
 })
 
 void test('invalid inputs fail before HTTP with structured exit code 2 errors', async t => {
@@ -468,8 +466,8 @@ void test('invalid inputs fail before HTTP with structured exit code 2 errors', 
   })
 
   const mixedMutation = await runCli([
-    'games', 'create', '--title', 'Example', '--team', 'team-1',
-    '--data', '{"title":"Other","team_id":"team-1"}'
+    'games', 'update', 'game-1', '--engine', 'unity',
+    '--data', '{"annotations":{"engine":"unity"}}'
   ])
   assert.equal(mixedMutation.code, 2)
   assert.match(parseToon(mixedMutation.stderr).error.message, /--data cannot be combined/)

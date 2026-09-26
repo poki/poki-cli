@@ -213,20 +213,6 @@ void test('normalized and raw mutations reject valid-shaped responses with the w
       jsonApi(res, { data: { type: 'games', id: 'g', attributes: { tracks: [] } } })
       return
     }
-    if (req.method === 'POST' && path === '/games') {
-      jsonApi(res, {
-        data: {
-          type: 'teams',
-          id: 'wrong-team',
-          attributes: {
-            type: 'games',
-            id: 'spoofed-game',
-            secret: 'wrong-create-identity-secret'
-          }
-        }
-      }, 201)
-      return
-    }
     if (req.method === 'PATCH' && path === '/games/g') {
       jsonApi(res, {
         data: {
@@ -248,7 +234,6 @@ void test('normalized and raw mutations reject valid-shaped responses with the w
   for (const raw of [false, true]) {
     const rawArgs = raw ? ['--raw'] : []
     for (const args of [
-      ['games', 'create', '--title', 'Example', '--team', 'team-1', ...rawArgs, '--format', 'json'],
       ['games', 'update', 'g', '--engine', 'unity', ...rawArgs, '--format', 'json']
     ]) {
       const result = await runCli(args, { env })
@@ -389,7 +374,7 @@ void test('--raw validates mutation success documents and preserves non-atomic u
       res.end()
       return
     }
-    if (req.method === 'POST' && path === '/games') return malformed(res, 'generic-raw-secret')
+    if (req.method === 'POST' && path === '/games/g/change_requests') return malformed(res, 'generic-raw-secret')
     if (req.method === 'POST' && path === '/games/g/versions/V/_archive') return malformed(res, 'action-raw-secret')
     if (req.method === 'POST' && path === '/games/g/playtest-requests') return malformed(res, 'replacement-raw-secret')
     if (req.method === 'PATCH' && path === '/games/g') return malformed(res, 'activation-raw-secret')
@@ -398,7 +383,7 @@ void test('--raw validates mutation success documents and preserves non-atomic u
   }, 'raw-mutation-validation')
 
   for (const invocation of [
-    ['games', 'create', '--title', 'Example', '--team', 'team-1', '--raw', '--format', 'json'],
+    ['game-change-requests', 'create', '--game', 'g', '--title', 'Example', '--raw', '--format', 'json'],
     ['versions', 'archive', 'V', '--game', 'g', '--raw', '--format', 'json']
   ]) {
     const result = await runCli(invocation, { env })

@@ -115,7 +115,7 @@ void test('multi-request command contracts include every route and conditional p
 })
 
 void test('server-backed field corrections stay explicit for agents', () => {
-  assert.equal(resourceFieldDetails(gamesDocumentation, 'title')?.mutability, 'create_only')
+  assert.equal(resourceFieldDetails(gamesDocumentation, 'title')?.mutability, 'read_only')
   assert.equal(resourceFieldDetails(gamesDocumentation, 'thumbnail'), undefined)
   assert.match(resourceFieldDetails(gamesDocumentation, 'annotations')?.input_behavior ?? '', /only engine.*preserves/i)
   assert.match(resourceFieldDetails(gamesDocumentation, 'suggested_categories')?.details ?? '', /category names/i)
