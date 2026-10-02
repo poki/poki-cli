@@ -11,7 +11,7 @@ import {
   audienceInputFromFlags,
   audienceOrientations,
   CategoryLimit,
-  deviceCategories,
+  playerFitDeviceCategories,
   validateAudienceInput
 } from './audience-input'
 import { registerResourceDiscovery } from './resource-docs'
@@ -34,7 +34,8 @@ import {
 } from './common'
 
 const createInput = mutationInputFields({
-  deviceCategory: 'device_category',
+  deviceCategory: 'device_categories',
+  testVersion: 'test_version',
   category: 'categories',
   categoryOnly: 'category_only',
   orientation: 'orientation',
@@ -51,7 +52,12 @@ function countriesValue (value: unknown): string {
 }
 
 function validateCreateData (data: Record<string, unknown>): void {
-  validateAudienceInput(data, { categoryLimit })
+  validateAudienceInput(data, { categoryLimit, multipleDevices: true })
+  if (data.test_version !== 1 && data.test_version !== 2) throw inputError('test_version must be 1 or 2.')
+  const devices = data.device_categories as string[]
+  if (data.test_version === 1 && !(devices.length === 3 || (devices.length === 1 && devices[0] === 'desktop') || (devices.length === 2 && devices.includes('mobile') && devices.includes('tablet')))) {
+    throw inputError('Player Fit v1 supports all devices, desktop, or mobile and tablet together.')
+  }
   if (typeof data.countries !== 'string') throw inputError('countries must be a comma-separated list of uppercase two-letter country codes.')
   const countries = data.countries
   if (countries !== '' && !/^[A-Z]{2}(,[A-Z]{2})*$/.test(countries)) {
@@ -74,19 +80,22 @@ export function registerPlayerFitTestCommands (yargs: Argv, api: ApiClient): Arg
         hint: 'Run `poki player-fit-tests list` to see visible test IDs.'
       }), argv)
     })
-    .command('create', 'Create a Player Fit test with the product-defined target of 500 gameplays', create => withGameMutationOptions(withDataOption(create, 'JSON or TOON audience-settings object, @file, or - for stdin; version remains a flag and game may come from project configuration'), projectGameId, 'Game ID that owns the version')
+    .command('create', 'Create a Player Fit test with the product-defined target of 500 gameplays (v1) or pageviews (v2)', create => withGameMutationOptions(withDataOption(create, 'JSON or TOON audience-settings object, @file, or - for stdin; version remains a flag and game may come from project configuration'), projectGameId, 'Game ID that owns the version')
       .option('version', { describe: 'Version ID to test', type: 'string', demandOption: true })
-      .option('device-category', { describe: 'Device audience', choices: deviceCategories })
+      .option('test-version', { describe: 'Player Fit methodology (1: legacy, 2: pageviews; default: 2)', type: 'number', choices: [1, 2] })
+      .option('device-category', { describe: 'Device audience; repeat to select multiple devices (default: all)', choices: playerFitDeviceCategories, type: 'array', string: true })
       .option('orientation', { describe: 'Required screen orientation', choices: audienceOrientations })
       .option('category', { describe: 'Numeric category ID; repeat up to five times', type: 'array', string: true })
       .option('category-only', { describe: 'Restrict recruitment to the selected categories', type: 'boolean' })
       .option('country', { describe: 'Uppercase two-letter country code; repeat for multiple countries', type: 'array', string: true }), async argv => {
       const data = await resolveMutationInput(argv, createInput, () => ({
-        ...audienceInputFromFlags(argv, { defaults: true, categoryLimit }),
+        ...audienceInputFromFlags(argv, { defaults: true, categoryLimit, multipleDevices: true }),
+        test_version: argv.testVersion ?? 2,
         category_only: argv.categoryOnly ?? false,
         countries: countriesValue(argv.country)
       }))
-      applyAudienceInputDefaults(data)
+      applyAudienceInputDefaults(data, { multipleDevices: true })
+      data.test_version ??= 2
       data.category_only ??= false
       data.countries ??= ''
       validateCreateData(data)
@@ -95,7 +104,7 @@ export function registerPlayerFitTestCommands (yargs: Argv, api: ApiClient): Arg
         ...data,
         game_id: argv.game,
         version_id: argv.version,
-        target_gameplays: 500
+        target_count: 500
       }
       const body = jsonApiDocument('player_fit_tests', attributes)
       await renderMutation(api, argv, { method: 'POST', path: gamePath(argv.game, 'player_fit_tests'), body, expected: { type: 'player_fit_tests' }, behavior: { sideEffects: ['Starts recruitment and may advance the self-service stage or notify watchers.'] } })

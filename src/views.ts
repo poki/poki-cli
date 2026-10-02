@@ -15,7 +15,7 @@ export const resourceSummaryFields: Record<ResourceListKind, readonly string[]> 
   'version-files': developerFieldsForKind('version-files'),
   playtests: ['type', 'id', 'game_id', 'version_id', 'duration', 'device_category', 'watched', 'archived_at', 'created_at', 'video_url', 'metadata_json_url'],
   'playtest-requests': ['type', 'id', 'game_id', 'version_id', 'recordings', 'pending', 'device_category', 'orientation', 'created_at'],
-  'player-fit-tests': ['type', 'id', 'game_id', 'version_id', 'status', 'gameplays', 'target_gameplays', 'engagement', 'stopped_at', 'created_at'],
+  'player-fit-tests': ['type', 'id', 'test_version', 'game_id', 'version_id', 'status', 'pageviews', 'started', 'target_count', 'engagement', 'stopped_at', 'created_at'],
   reviews: ['type', 'id', 'version', 'status', 'queue_time', 'seen_by_developer', 'report_submitted_at', 'created_by', 'created_at'],
   'game-change-requests': ['type', 'id', 'game_id', 'game', 'status', 'title', 'thumbnail_url', 'created_by', 'reviewed_by', 'created_at'],
   'game-events': ['type', 'id', 'game_id', 'category', 'action', 'label', 'description', 'enabled', 'include_in_funnel', 'created_at', 'updated_at'],

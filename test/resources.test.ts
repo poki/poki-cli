@@ -72,7 +72,7 @@ void test('resource commands use the expected routes, normalized output, and mut
 
     if (req.method === 'POST' && req.url === '/games/game-1/player_fit_tests') {
       observedBodies.push(await requestBody(req))
-      jsonApi(res, { data: { type: 'player_fit_tests', id: 'fit-1', attributes: { target_gameplays: 500 } } }, 201)
+      jsonApi(res, { data: { type: 'player_fit_tests', id: 'fit-1', attributes: { target_count: 500 } } }, 201)
       return
     }
     if (req.method === 'GET' && req.url !== undefined && req.url.startsWith('/games/game-1/playtest-recordings?')) {
@@ -98,8 +98,10 @@ void test('resource commands use the expected routes, normalized output, and mut
   const fit = await runCli(['player-fit-tests', 'create', '--game', 'game-1', '--version', 'version-1', '--format', 'json'], { env })
   assert.equal(fit.code, 0, fit.stderr)
   const fitDocument = observedBodies[0] as unknown as { data: { attributes: Record<string, unknown> } }
-  assert.equal(fitDocument.data.attributes.target_gameplays, 500)
+  assert.equal(fitDocument.data.attributes.target_count, 500)
   assert.equal(fitDocument.data.attributes.version_id, 'version-1')
+  assert.deepEqual(fitDocument.data.attributes.device_categories, ['mobile', 'desktop', 'tablet'])
+  assert.equal(fitDocument.data.attributes.device_category, undefined)
 
   const videoUrl = 'https://storage.googleapis.com/poki-playtest-recordings/recording-1.webm'
   const metadataJsonUrl = 'https://storage.googleapis.com/poki-playtest-recordings/recording-1.json'
@@ -267,7 +269,7 @@ void test('game-scoped commands route via the project game by default and via ex
       return
     }
     if (req.method === 'POST' && url.pathname === '/games/game-1/player_fit_tests') {
-      jsonApi(res, { data: { type: 'player_fit_tests', id: 'new-fit-test', attributes: { target_gameplays: 500 } } }, 201)
+      jsonApi(res, { data: { type: 'player_fit_tests', id: 'new-fit-test', attributes: { target_count: 500 } } }, 201)
       return
     }
     if (req.method === 'GET' && url.pathname === '/games/game-1/playtest-recordings') {
@@ -1234,4 +1236,46 @@ void test('game creation always directs users to the manual workflow without con
     assert.equal(error.retryable, false)
   }
   assert.equal(requests, 0)
+})
+
+void test('Player Fit creation supports every device selection and validates array input', async () => {
+  const args = ['player-fit-tests', 'create', '--game', 'game-1', '--version', 'version-1', '--dry-run', '--format', 'json']
+  const devices = ['mobile', 'desktop', 'tablet']
+  for (let mask = 1; mask < 8; mask++) {
+    const selected = devices.filter((_, index) => (mask & (1 << index)) !== 0)
+    const result = await runCli([...args, ...selected.flatMap(device => ['--device-category', device])])
+    assert.equal(result.code, 0, result.stderr)
+    const attributes = JSON.parse(result.stdout).request.body.data.attributes
+    assert.deepEqual(attributes.device_categories, selected)
+    assert.equal(attributes.device_category, undefined)
+    assert.equal(attributes.target_count, 500)
+    assert.equal(attributes.target_gameplays, undefined)
+    assert.equal(attributes.test_version, 2)
+  }
+  const fromData = await runCli([...args, '--data', JSON.stringify({ device_categories: ['tablet'] })])
+  assert.equal(fromData.code, 0, fromData.stderr)
+  assert.deepEqual(JSON.parse(fromData.stdout).request.body.data.attributes.device_categories, ['tablet'])
+  for (const selection of [[], ['any'], ['mobile', 'mobile'], [''], 'tablet', [null]]) {
+    const invalid = await runCli([...args, '--data', JSON.stringify({ device_categories: selection })])
+    assert.equal(invalid.code, 2, invalid.stdout)
+    assert.match(JSON.parse(invalid.stderr).error.message, /device_categories/)
+  }
+  const legacy = await runCli([...args, '--data', JSON.stringify({ device_category: 'mobile' })])
+  assert.equal(legacy.code, 2)
+})
+
+void test('Player Fit methodology defaults, legacy selection, and invalid versions', async () => {
+  const args = ['player-fit-tests', 'create', '--game', 'game-1', '--version', 'version-1', '--dry-run', '--format', 'json']
+  for (const devices of [['mobile', 'desktop', 'tablet'], ['desktop'], ['mobile', 'tablet']]) {
+    const result = await runCli([...args, '--test-version', '1', ...devices.flatMap(device => ['--device-category', device])])
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(JSON.parse(result.stdout).request.body.data.attributes.test_version, 1)
+  }
+  const data = await runCli([...args, '--data', '{"test_version":1}'])
+  assert.equal(data.code, 0, data.stderr)
+  assert.equal(JSON.parse(data.stdout).request.body.data.attributes.test_version, 1)
+  for (const data of [{ test_version: 3 }, { test_version: '1' }, { test_version: 1, device_categories: ['tablet'] }, { test_version: 1, device_categories: ['mobile'] }]) {
+    const result = await runCli([...args, '--data', JSON.stringify(data)])
+    assert.equal(result.code, 2, result.stdout)
+  }
 })
