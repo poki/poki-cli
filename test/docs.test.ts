@@ -196,3 +196,13 @@ void test('server-sourced lifecycle enums stay pinned', () => {
     assert.deepEqual(resourceFieldDetails(documentation, field)?.enum_values, values, `${documentation.command}.${field}`)
   }
 })
+
+void test('Player Fit discovery describes neutral fields and version-specific populations', () => {
+  for (const name of ['target_count', 'mobile_collected', 'desktop_collected', 'tablet_collected', 'in_progress_count', 'average_in_progress_time_seconds', 'pageviews', 'gameplays', 'started']) {
+    assert.notEqual(resourceFieldDetails(playerFitTestsDocumentation, name), undefined, name)
+  }
+  for (const name of ['target_gameplays', 'mobile_started', 'desktop_started', 'tablet_started', 'gameplays_in_progress', 'average_in_progress_gameplay_time_seconds', 'new_engagement', 'new_started']) {
+    assert.equal(resourceFieldDetails(playerFitTestsDocumentation, name), undefined, name)
+  }
+  assert.match(JSON.stringify(resourceFieldDetails(playerFitTestsDocumentation, 'engagement')), /all admitted pageviews/)
+})

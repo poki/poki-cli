@@ -2,6 +2,7 @@ import { inputError } from '../errors'
 import { asStrings } from './common'
 
 export const deviceCategories = ['any', 'desktop', 'mobile'] as const
+export const playerFitDeviceCategories = ['mobile', 'desktop', 'tablet'] as const
 export const audienceOrientations = ['both', 'portrait', 'landscape'] as const
 
 // A category ceiling is one command's product rule, so the command supplies
@@ -14,6 +15,7 @@ export interface CategoryLimit {
 
 interface AudienceInputOptions {
   defaults?: boolean
+  multipleDevices?: boolean
   categoryLimit?: CategoryLimit
 }
 
@@ -33,7 +35,11 @@ export function audienceInputFromFlags (
 ): Record<string, unknown> {
   const data: Record<string, unknown> = {}
   if (options.defaults === true || argv.deviceCategory !== undefined) {
-    data.device_category = argv.deviceCategory ?? 'any'
+    if (options.multipleDevices === true) {
+      data.device_categories = asStrings(argv.deviceCategory) ?? [...playerFitDeviceCategories]
+    } else {
+      data.device_category = argv.deviceCategory ?? 'any'
+    }
   }
   if (options.defaults === true || argv.orientation !== undefined) {
     data.orientation = argv.orientation ?? 'both'
@@ -45,17 +51,27 @@ export function audienceInputFromFlags (
   return data
 }
 
-export function applyAudienceInputDefaults (data: Record<string, unknown>): void {
-  data.device_category ??= 'any'
+export function applyAudienceInputDefaults (data: Record<string, unknown>, options: Pick<AudienceInputOptions, 'multipleDevices'> = {}): void {
+  if (options.multipleDevices === true) {
+    data.device_categories ??= [...playerFitDeviceCategories]
+  } else {
+    data.device_category ??= 'any'
+  }
   data.orientation ??= 'both'
   data.categories ??= ''
 }
 
 export function validateAudienceInput (
   data: Record<string, unknown>,
-  options: Pick<AudienceInputOptions, 'categoryLimit'> = {}
+  options: Pick<AudienceInputOptions, 'categoryLimit' | 'multipleDevices'> = {}
 ): void {
-  if (typeof data.device_category !== 'string' || !deviceCategories.includes(data.device_category as typeof deviceCategories[number])) {
+  if (options.multipleDevices === true) {
+    if (!Array.isArray(data.device_categories) || data.device_categories.length === 0 ||
+        data.device_categories.some(device => !playerFitDeviceCategories.includes(device)) ||
+        new Set(data.device_categories).size !== data.device_categories.length) {
+      throw inputError('device_categories must be a nonempty, distinct array of mobile, desktop, and tablet.')
+    }
+  } else if (typeof data.device_category !== 'string' || !deviceCategories.includes(data.device_category as typeof deviceCategories[number])) {
     throw inputError('device_category must be any, desktop, or mobile.')
   }
   if (typeof data.orientation !== 'string' || !audienceOrientations.includes(data.orientation as typeof audienceOrientations[number])) {
