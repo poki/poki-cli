@@ -391,30 +391,45 @@ void test('Media Kit API rejections retain normal permission and unavailable-ass
   assert.equal(errorOf(unavailable).code, 'CONFLICT')
 })
 
-void test('interrupted Media Kit downloads clean up partial files and preserve the previous destination', async t => {
-  let started: (() => void) | undefined
-  const streaming = new Promise<void>(resolve => { started = resolve })
-  const { directory, env } = await apiHarness(t, (req, res) => {
-    if (req.url?.includes('download-url') === true) { jsonApi(res, { location: '/stream' }); return }
-    res.write('partial')
-    started?.()
-  }, 'media-kit-interrupt')
-  const output = join(directory, 'kit.zip')
-  writeFileSync(output, 'original')
-  const child = spawnCli(scoped('download', 'all', '--output', output, '--force'), { env })
-  const completed = completion(child)
-  await streaming
-  // Wait for the local temporary file, not just response headers at the server.
-  for (let attempt = 0; attempt < 100 && !readdirSync(directory).some(name => name.startsWith('.poki-download-')); attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 10))
-  }
-  child.kill('SIGINT')
-  const result = await completed
-  assert.equal(result.code, 130, result.stderr)
-  assert.equal(readFileSync(output, 'utf8'), 'original')
-  assert.equal(readdirSync(directory).some(name => name.startsWith('.poki-download-')), false)
-  assert.equal(existsSync(output), true)
-})
+for (const interrupt of ['signal', 'handler'] as const) {
+  void test(`interrupted Media Kit downloads clean up partial files and preserve the previous destination (${interrupt})`, {
+    skip: interrupt === 'signal' && process.platform === 'win32'
+  }, async t => {
+    let started: (() => void) | undefined
+    const streaming = new Promise<void>(resolve => { started = resolve })
+    const { directory, env } = await apiHarness(t, (req, res) => {
+      if (req.url?.includes('download-url') === true) { jsonApi(res, { location: '/stream' }); return }
+      res.write('partial')
+      started?.()
+    }, 'media-kit-interrupt')
+    const output = join(directory, 'kit.zip')
+    writeFileSync(output, 'original')
+    // Windows child.kill('SIGINT') forcefully terminates the child without running
+    // its handler. A test-only preload exercises that handler on every platform;
+    // the signal case also verifies real delivery where Node supports it.
+    const preload = interrupt === 'handler' ? join(directory, 'interrupt.mjs') : undefined
+    if (preload !== undefined) {
+      writeFileSync(preload, "process.stdin.once('data', () => process.emit('SIGINT', 'SIGINT'))\n")
+    }
+    const child = spawnCli(scoped('download', 'all', '--output', output, '--force'), { env, preload })
+    const completed = completion(child)
+    await streaming
+    // Wait for the local temporary file, not just response headers at the server.
+    for (let attempt = 0; attempt < 100 && !readdirSync(directory).some(name => name.startsWith('.poki-download-')); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    assert.ok(readdirSync(directory).some(name => name.startsWith('.poki-download-')))
+    if (interrupt === 'handler') child.stdin.write('interrupt\n')
+    else child.kill('SIGINT')
+    const result = await completed
+    assert.equal(result.code, 130, result.stderr)
+    assert.equal(errorOf(result).code, 'INTERRUPTED')
+    assert.deepEqual(errorOf(result).details, { signal: 'SIGINT' })
+    assert.equal(readFileSync(output, 'utf8'), 'original')
+    assert.equal(readdirSync(directory).some(name => name.startsWith('.poki-download-')), false)
+    assert.equal(existsSync(output), true)
+  })
+}
 
 void test('Media Kit upload transport timeouts and single-file rejections never replay the request', async t => {
   let status = 400
