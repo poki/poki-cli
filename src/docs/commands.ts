@@ -33,6 +33,7 @@ import { addPlayerFitTestCommandSpecs } from './command-groups/player-fit-tests'
 import { addPlaytestRecordingCommandSpecs } from './command-groups/playtest-recordings'
 import { addPlaytestRequestCommandSpecs } from './command-groups/playtest-requests'
 import { addReviewCommandSpecs } from './command-groups/reviews'
+import { addRealtimeCommandSpecs } from './command-groups/realtime'
 import { addVersionActivationCommandSpecs } from './command-groups/version-activations'
 import { addVersionCommandSpecs } from './command-groups/versions'
 import type { CommandSpecBuilder } from './command-groups/types'
@@ -385,6 +386,7 @@ addGameEventCommandSpecs(commandSpecBuilder)
 addGameEventFunnelCommandSpecs(commandSpecBuilder)
 addPlayerFeedbackQuestionCommandSpecs(commandSpecBuilder)
 addNetlibLobbyCommandSpecs(commandSpecBuilder)
+addRealtimeCommandSpecs(commandSpecBuilder)
 addMediaKitCommandSpecs(commandSpecBuilder)
 
 addDataCommandSpecs(commandSpecBuilder)

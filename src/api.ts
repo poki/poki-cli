@@ -10,6 +10,7 @@ import { CLI_USER_AGENT } from './version'
 export type ResponseType = 'json' | 'text'
 
 export interface ApiRequest {
+  service?: 'realtime'
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   path: string
   query?: URLSearchParams
@@ -20,7 +21,7 @@ export interface ApiRequest {
   rawBody?: BodyInit
   timeoutMs?: number
   // Marks a non-GET request whose failure is safe to retry (the read-only
-  // analytics POST /_data); timeout and network errors key retryable off this
+  // analytics and realtime POSTs); timeout and network errors key retryable off this
   // in addition to the HTTP method.
   retrySafe?: boolean
 }
@@ -32,6 +33,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface ApiClientDependencies {
+  realtimeUrl: string
   fetch: typeof globalThis.fetch
   readAuth: () => Config | undefined
   refreshAuth: (config: Config) => Promise<Config>
@@ -89,6 +91,7 @@ export function apiResponseError (status: number, body: unknown, headers: Header
 
 export class ApiClient {
   readonly baseUrl: string
+  private readonly realtimeUrl: string
   private readonly transport: typeof globalThis.fetch
   private readonly readAuth: () => Config | undefined
   private readonly refreshAuth: (config: Config) => Promise<Config>
@@ -104,6 +107,7 @@ export class ApiClient {
     dependencies: Partial<ApiClientDependencies> = {}
   ) {
     this.baseUrl = baseUrl.replace(/\/$/, '')
+    this.realtimeUrl = (dependencies.realtimeUrl ?? serviceEnvironment().realtimeUrl).replace(/\/$/, '')
     this.transport = dependencies.fetch ?? globalThis.fetch
     this.readAuth = dependencies.readAuth ?? readStoredAuth
     this.refreshAuth = dependencies.refreshAuth ?? refreshStoredAuth
@@ -167,20 +171,18 @@ export class ApiClient {
     return this.externalUrl(location, this.baseUrl).toString()
   }
 
-  // The configured API origin is the complete authenticated transport boundary,
-  // so which origins the CLI will contact is decided in exactly one place.
-  // Copies of this rule in the request path and in pagination could disagree.
+  // Pagination remains restricted to the Developers API origin.
   isApiOrigin (url: URL): boolean {
     return url.origin === new URL(this.baseUrl).origin
   }
 
-  // Resolves the path or absolute link an API request or a followed pagination
-  // link names, and refuses anything outside the configured origin.
-  resolveApiUrl (path: string, query?: URLSearchParams): URL {
+  // Requests and pagination links must stay within the selected service origin.
+  resolveApiUrl (path: string, query?: URLSearchParams, service?: 'realtime'): URL {
+    const baseUrl = service === 'realtime' ? this.realtimeUrl : this.baseUrl
     const url = /^https?:\/\//.test(path)
       ? new URL(path)
-      : new URL(this.baseUrl + (path.startsWith('/') ? path : `/${path}`))
-    if (!this.isApiOrigin(url)) {
+      : new URL(baseUrl + (path.startsWith('/') ? path : `/${path}`))
+    if (url.origin !== new URL(baseUrl).origin) {
       throw new CliError('INVALID_API_RESPONSE', 'The Poki API returned a pagination link for another origin.', 5, {
         details: { expected: 'configured_api_origin', received_kind: 'different_origin' }
       })
@@ -269,7 +271,7 @@ export class ApiClient {
   }
 
   private async execute<T> (request: ApiRequest, accessToken: string): Promise<ApiResponse<T>> {
-    const url = this.resolveApiUrl(request.path, request.query)
+    const url = this.resolveApiUrl(request.path, request.query, request.service)
 
     const headers: Record<string, string> = {
       Accept: request.accept ?? 'application/vnd.api+json',
@@ -300,8 +302,8 @@ export class ApiClient {
         method,
         headers,
         body,
-        // The configured API origin is the complete authenticated transport
-        // boundary. Fetch follows redirects by default, and a 307 or 308 can
+        // Each request is restricted to its selected service origin.
+        // Fetch follows redirects by default, and a 307 or 308 can
         // resend a mutation body to the redirect target. Surface every 3xx to
         // request() instead so mutations retain inspect-before-replay recovery.
         // Signed downloads intentionally keep their separate redirect behavior.

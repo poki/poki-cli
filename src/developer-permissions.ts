@@ -27,6 +27,7 @@ export const developerPermissionCatalog = [
   { code: 'can_read_owned_player_fit_tests', description: 'List or read Player Fit tests for a game belonging to the current user or team.' },
   { code: 'can_read_owned_playtest_recordings', description: 'List, read, archive, restore, or mark watched Playtest recordings for a game belonging to the current user or team.' },
   { code: 'can_read_owned_reviews', description: 'List or read reviews for a game belonging to the current user or team.' },
+  { code: 'can_read_owned_versions', description: 'Read versions and their realtime error metrics for games belonging to the current user or team.' },
   { code: 'can_read_self', description: 'Read the authenticated user, team relationship, and effective permission metadata.' }
 ] as const
 

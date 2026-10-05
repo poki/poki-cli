@@ -15,6 +15,7 @@ import { registerPlayerFeedbackQuestionCommands } from './commands/player-feedba
 import { registerPlaytestRequestCommands } from './commands/playtest-requests'
 import { registerPlaytestCommands } from './commands/playtests'
 import { registerReviewCommands } from './commands/reviews'
+import { registerRealtimeCommands } from './commands/realtime'
 import { registerVersionActivationCommands } from './commands/version-activations'
 import { registerVersionCommands } from './commands/versions'
 import { availableCommands, CommandSpec } from './docs/commands'
@@ -298,6 +299,7 @@ export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
   cli = registerGameEventCommands(cli, api)
   cli = registerPlayerFeedbackQuestionCommands(cli, api)
   cli = registerNetlibLobbyCommands(cli, api)
+  cli = registerRealtimeCommands(cli, api)
   return registerDataCommands(cli, api)
 }
 

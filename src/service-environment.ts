@@ -1,5 +1,6 @@
 export interface ServiceEnvironment {
   apiUrl: string
+  realtimeUrl: string
   authUrl: string
   signInUrl: string
   legacyUploadHostname: string
@@ -9,6 +10,7 @@ export interface ServiceEnvironment {
 
 const production: ServiceEnvironment = {
   apiUrl: 'https://devs-api.poki.io',
+  realtimeUrl: 'https://realtime.poki.com',
   authUrl: 'https://auth.poki.io',
   signInUrl: 'https://app.poki.dev/signin/',
   legacyUploadHostname: '34.111.107.149',
@@ -17,6 +19,7 @@ const production: ServiceEnvironment = {
 
 const acceptance: ServiceEnvironment = {
   apiUrl: 'https://devs-api-acceptance.poki.io',
+  realtimeUrl: 'https://realtime-acceptance.poki.com',
   authUrl: 'https://auth-acceptance.poki.io',
   signInUrl: 'https://acceptance.devs-app.pages.dev/signin/',
   legacyUploadHostname: '34.102.180.200',

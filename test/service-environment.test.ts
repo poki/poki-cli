@@ -6,6 +6,7 @@ import { runCli, runProductCli } from './helpers'
 
 const production = {
   apiUrl: 'https://devs-api.poki.io',
+  realtimeUrl: 'https://realtime.poki.com',
   authUrl: 'https://auth.poki.io',
   signInUrl: 'https://app.poki.dev/signin/',
   legacyUploadHostname: '34.111.107.149',
@@ -14,6 +15,7 @@ const production = {
 
 const acceptance = {
   apiUrl: 'https://devs-api-acceptance.poki.io',
+  realtimeUrl: 'https://realtime-acceptance.poki.com',
   authUrl: 'https://auth-acceptance.poki.io',
   signInUrl: 'https://acceptance.devs-app.pages.dev/signin/',
   legacyUploadHostname: '34.102.180.200',
