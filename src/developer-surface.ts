@@ -33,6 +33,21 @@ const undocumentedFieldTypesByType: Readonly<Record<string, Readonly<Record<stri
     name: 'string|null',
     code: 'string|null'
   },
+  quotas: {
+    type: 'string',
+    id: 'string',
+    resets_at: 'timestamp',
+    player_fit_game_limit: 'integer',
+    player_fit_game_used: 'integer',
+    player_fit_team_limit: 'integer',
+    player_fit_team_used: 'integer',
+    playtest_game_limit: 'integer',
+    playtest_game_used: 'integer',
+    playtest_team_limit: 'integer',
+    playtest_team_used: 'integer',
+    webfit_limit: 'integer',
+    webfit_active: 'integer'
+  },
   game_version_files: {
     type: 'string',
     id: 'string',

@@ -21,6 +21,7 @@ import {
 } from '../developer-permissions'
 import { AUTH_LOGIN_USER_ACTION_HINT, AUTH_REQUIRED_HINT } from '../errors'
 import { addAudienceCommandSpecs } from './command-groups/audiences'
+import { addLimitCommandSpecs } from './command-groups/limits'
 import { addAuthCommandSpecs } from './command-groups/auth'
 import { addDataCommandSpecs } from './command-groups/data'
 import { addGameChangeRequestCommandSpecs } from './command-groups/game-change-requests'
@@ -320,11 +321,11 @@ const commandSpecBuilder: CommandSpecBuilder = {
 
 add({
   path: [],
-  summary: 'Manage Poki for Developers resources and analytics.',
+  summary: 'Manage Poki resources and analytics.',
   behavior: [
     'Use poki help --all for the compact manifest and poki help --search TEXT for discovery. Reference topics: poki help permissions, formats, shapes, workflows, and updates.',
     'Game-scoped commands use project game_id or --game.',
-    'TOON is the default structured format; use --format json for minified JSON. Run poki help formats for the TOON primer; JSON input is always accepted.',
+    'Output defaults to TOON; --format json selects minified JSON. See poki help formats. JSON input is always accepted.',
     'API resource mutations support --dry-run, which proves local input validation only unless a command explicitly reports additional checks. Destructive and non-atomic operations require --yes. Analytics --validate-only likewise checks local structure without claiming deployed-API validity.',
     'risk values: offline (no network), read_only (reads remote state), local_write (writes only local files), mutation, destructive, non_atomic.',
     'List --all operations fail if an internal safety ceiling prevents proving completeness. Explicit --max-pages or --max-items opts into a successful bounded result with truncation metadata.',
@@ -368,6 +369,7 @@ add({ path: ['context'], summary: 'Describe effective project configuration, API
 apiAction(['whoami'], 'Return the current user, team relationship, and CLI-relevant developer permission identifiers.', { method: 'GET', path: '/users/@me', contacts_api: true }, ['can_read_self'], { options: outputOptions, behavior: ['The response meta.permissions array is restricted to permissions used by this developer CLI; unrelated role-wide permissions are omitted.'], side_effects: ['Updates last_seen for a non-impersonated user.'], examples: [example('poki whoami --format json', 'Read the identity and developer permissions used by CLI requests.')] })
 
 addAuthCommandSpecs(commandSpecBuilder)
+addLimitCommandSpecs(commandSpecBuilder)
 addAudienceCommandSpecs(commandSpecBuilder)
 
 addGameCommandSpecs(commandSpecBuilder)

@@ -1,7 +1,9 @@
+import { safeQuotaMetadata } from './quotas'
+
 export type ErrorDetails = Record<string, unknown> | unknown[] | string | number | boolean | null
 
 const safeApiErrorFields = ['status', 'code', 'title', 'detail'] as const
-export type SafeApiError = Partial<Record<typeof safeApiErrorFields[number], string>>
+export type SafeApiError = Partial<Record<typeof safeApiErrorFields[number], string>> & { meta?: Record<string, unknown> }
 export interface SafeApiErrorResponse extends Record<string, unknown> { errors?: SafeApiError[] }
 
 export const AUTH_LOGIN_USER_ACTION_HINT = 'Ask the developer to run `poki auth login` for a global install or `npx poki auth login` for a project dependency in their own interactive terminal and complete the browser sign-in. Never run either command yourself. Credentials must be stored in the developer\'s environment, not an LLM or agent sandbox.'
@@ -9,7 +11,7 @@ export const AUTH_REQUIRED_HINT = `${AUTH_LOGIN_USER_ACTION_HINT} After the deve
 
 /**
  * Project a backend JSON:API error document onto the reviewed developer
- * surface. Error source pointers, per-error metadata, document metadata, and
+ * surface. Error source pointers, unreviewed per-error metadata, document metadata, and
  * any future backend fields are deliberately omitted.
  */
 export function safeApiErrorResponse (body: unknown): SafeApiErrorResponse {
@@ -24,6 +26,10 @@ export function safeApiErrorResponse (body: unknown): SafeApiErrorResponse {
     const safe: SafeApiError = {}
     for (const field of safeApiErrorFields) {
       if (typeof source[field] === 'string') safe[field] = source[field]
+    }
+    if (safe.code === 'test-quota-exceeded') {
+      const meta = safeQuotaMetadata(source.meta)
+      if (meta !== undefined) safe.meta = meta
     }
     return Object.keys(safe).length === 0 ? [] : [safe]
   })

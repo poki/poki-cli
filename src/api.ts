@@ -71,6 +71,15 @@ export function apiResponseError (status: number, body: unknown, headers: Header
     : normalizedCode === '' || normalizedCode === 'PERMISSION_DENIED'
       ? `HTTP_${status}`
       : normalizedCode
+  if (status === 429 && safeDetails.errors?.some(error => error.code === 'test-quota-exceeded') === true) {
+    return new CliError('TEST_QUOTA_EXCEEDED', message, 4, {
+      status,
+      details: safeDetails,
+      retryable: false,
+      requestId: headers.get('x-request-id') ?? undefined,
+      hint: 'This request was rejected without starting a test. Run `poki limits get` for current capacity. Reduce the recording batch if it can fit, wait for quota to reset or be released, or contact your account manager if the limit is zero. Do not automatically retry or cancel work to regain quota.'
+    })
+  }
   const method = request.method ?? 'GET'
   const retrySafe = method === 'GET' || request.retrySafe === true
   const transient = status === 408 || status === 429 || status >= 500

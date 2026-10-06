@@ -5,6 +5,7 @@ import { ApiClient } from './api'
 import { registerAuthCommands } from './commands/auth'
 import { registerAudienceCommands } from './commands/audiences'
 import { registerDataCommands } from './commands/data'
+import { registerLimitCommands } from './commands/limits'
 import { registerDiscoveryCommands } from './commands/discovery'
 import { registerGameChangeRequestCommands } from './commands/game-change-requests'
 import { registerGameEventCommands } from './commands/game-events'
@@ -287,6 +288,7 @@ export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
   cli = registerAuthCommands(cli)
   cli = registerAudienceCommands(cli)
   cli = registerDiscoveryCommands(cli, api)
+  cli = registerLimitCommands(cli, api)
   cli = registerMediaKitCommands(cli, api)
   cli = registerGameCommands(cli, api)
   cli = registerVersionCommands(cli, api)
