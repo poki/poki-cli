@@ -54,7 +54,7 @@ void test('release publication validates and publishes the verified index packag
   assert.equal(manifest.scripts.test, 'node scripts/test.mjs')
   assert.equal(
     manifest.scripts['release:validate'],
-    'yarn validate:source && yarn build && yarn audit:dependencies'
+    'yarn validate:source && yarn build'
   )
   assert.equal(
     manifest.scripts['release:check'],
