@@ -221,6 +221,8 @@ function normalizeResource (
     if (isRecord(resource.attributes)) {
       for (const [attribute, value] of Object.entries(resource.attributes)) {
         if (type === 'marketing_assets' && attribute === 'asset_type') continue
+        // This URL is owned by the CLI and derived from the resource identity.
+        if (type === 'game_versions' && attribute === 'preview_url') continue
         const field = type === 'marketing_assets' && attribute === 'type' ? 'asset_type' : attribute
         const definition = developerResourceField(type, field)
         if (definition === undefined) continue
@@ -240,6 +242,7 @@ function normalizeResource (
     }
     if (isRecord(resource.relationships)) {
       for (const [field, relationship] of Object.entries(resource.relationships)) {
+        if (type === 'game_versions' && field === 'preview_url') continue
         const definition = developerResourceField(type, field)
         if (definition === undefined) continue
         // Likewise, a relationship cannot occupy a documented attribute name.
@@ -251,6 +254,9 @@ function normalizeResource (
         }
         output[field] = normalized.value
       }
+    }
+    if (type === 'game_versions' && typeof output.game_id === 'string' && output.game_id.trim() !== '') {
+      output.preview_url = `https://poki.com/en/preview/${encodeURIComponent(output.game_id)}/${encodeURIComponent(id)}`
     }
     return output
   } finally {
@@ -377,6 +383,8 @@ export function normalizeJsonApiResourceForRecovery (body: unknown): ResourceRes
   })
   if (isRecord(recovery.data)) {
     delete recovery.data.id
+    // A recovery placeholder must never become a navigable version URL.
+    if (recovery.data.type === 'game_versions') delete recovery.data.preview_url
   }
   // The synthetic identity must not surface anywhere in the snapshot, so the
   // degradation report loses it exactly like the resource does.

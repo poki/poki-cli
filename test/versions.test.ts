@@ -91,7 +91,7 @@ void test('versions upload preserves a validated plain response for --raw and ac
   ], { env })
   assert.equal(forwardCompatible.code, 0, forwardCompatible.stderr)
   assert.deepEqual(JSON.parse(forwardCompatible.stdout), {
-    data: { type: 'game_versions', id: 'jsonapi-version', game_id: 'g', state: 'created' },
+    data: { type: 'game_versions', id: 'jsonapi-version', game_id: 'g', state: 'created', preview_url: 'https://poki.com/en/preview/g/jsonapi-version' },
     meta: {}
   })
 })
@@ -186,7 +186,7 @@ void test('versions upload preserves the created version when subsequent polling
   assert.equal(error.retryable, false)
   assert.equal(error.details.version_created, true)
   assert.equal(error.details.created_version_id, 'V')
-  assert.deepEqual(error.details.created_version, { type: 'game_versions', id: 'V', game_id: 'g', state: 'processing' })
+  assert.deepEqual(error.details.created_version, { type: 'game_versions', id: 'V', game_id: 'g', state: 'processing', preview_url: 'https://poki.com/en/preview/g/V' })
   assert.deepEqual(error.details.recovery.resume_poll, {
     action: 'poll_existing_version',
     command: 'poki',

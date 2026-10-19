@@ -183,7 +183,8 @@ export const versionsDocumentation: ResourceDocumentation = {
     field('updated_at', 'timestamp', 'read-only', 'UTC server timestamp of the latest version update.'),
     field('archived_at', 'timestamp|null', 'read-only', 'UTC archive timestamp; null means the version is active.'),
     field('activated_at', 'timestamp|null', 'computed read-only', 'Most recent UTC activation time when this version is currently live. Use poki version-activations list --all for the stored point-event history.'),
-    field('url', 'string', 'computed read-only', 'Preview URL for the processed version.'),
+    field('url', 'string', 'computed read-only', 'Hosted game entrypoint supplied by the API. Direct browser access may be blocked; use preview_url to play or inspect the game in a browser.'),
+    field('preview_url', 'string', 'CLI-computed read-only', 'Browser preview URL at https://poki.com/en/preview/{game_id}/{id}, derived locally when both IDs are available. Included in normalized versions, including versions embedded in other resources; --raw remains unchanged. Open this URL to play or inspect the game once state is done.'),
     field('reviews', 'array<review relationship>', 'read-only relationship', 'Reviews expanded when included, otherwise retained as resource identifiers.', ['reviews']),
     field('game', 'game relationship', 'read-only relationship', 'Parent game when supplied by the endpoint.', ['games']),
     field('activated_by', 'user relationship', 'computed read-only relationship', 'User responsible for the current activation when supplied.', ['users'])

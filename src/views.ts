@@ -7,7 +7,7 @@ export type { ResourceListKind } from './developer-surface'
 export const resourceSummaryFields: Record<ResourceListKind, readonly string[]> = {
   'media-kit': ['type', 'id', 'game_id', 'asset_type', 'status', 'filename', 'size', 'error'],
   games: ['type', 'id', 'title', 'team_id', 'approved', 'public_version', 'updated_at'],
-  versions: ['type', 'id', 'game_id', 'filename', 'label', 'state', 'progress', 'archived_at', 'activated_at', 'url', 'created_at'],
+  versions: ['type', 'id', 'game_id', 'filename', 'label', 'state', 'progress', 'archived_at', 'activated_at', 'preview_url', 'url', 'created_at'],
   'version-activations': ['type', 'id', 'game_id', 'version_id', 'activated_at', 'deactivated_at', 'activated_by'],
   // Version files carry few enough fields that the summary is the full
   // developer-visible list; deriving it keeps the two from drifting, because a

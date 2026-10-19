@@ -742,6 +742,13 @@ export function shapesDocument (): Record<string, unknown> {
 export function workflowsDocument (): Record<string, unknown> {
   return {
     topic: 'workflows',
+    preview: {
+      steps: [
+        'poki versions list --game GAME_ID --filter state=done --sort -created_at --page-size 1 returns the newest processed, non-archived build.',
+        'Open the returned preview_url in a browser to play or inspect that build. The url field is the hosted entrypoint and direct browser access may be blocked.',
+        'For a specific build, run poki versions get VERSION_ID --wait and open preview_url once state is done. Previewing does not activate the version or change public traffic.'
+      ]
+    },
     release: {
       steps: [
         'poki versions upload --label "..." --wait creates the version and blocks until processing reaches done or error (drop --wait to poll manually).',
@@ -874,7 +881,7 @@ export const helpTopics: HelpTopic[] = [
   { name: 'formats', summary: 'TOON and JSON encodings, input auto-detection, and the CSV analytics export.', keywords: ['toon', 'json', 'csv', 'format', 'encoding', 'stdin'], document: formatsDocument },
   { name: 'permissions', summary: 'Developer permission codes, descriptions, command mappings, scope, and denial behavior.', keywords: ['permission', 'permissions', 'access', 'forbidden', 'denied', 'developer-support', 'ownership', 'scope', 'whoami'], document: permissionsDocument },
   { name: 'shapes', summary: 'Response envelopes, list views, pagination meta, dry-run documents, and the error contract.', keywords: ['output', 'shape', 'envelope', 'meta', 'pagination', 'has_next', 'view', 'error', 'stderr', 'exit code', 'retryable', 'retry_after', 'request_id', 'dry-run'], document: shapesDocument },
-  { name: 'workflows', summary: 'End-to-end release, polling, discovery, and reporting flows with rollback guidance.', keywords: ['workflow', 'release', 'publish', 'poll', 'polling', 'wait', 'rollback', 'review', 'activate', 'report', 'timezone', 'rate limit', 'team id', 'game id'], document: workflowsDocument },
+  { name: 'workflows', summary: 'End-to-end preview, release, polling, discovery, and reporting flows with rollback guidance.', keywords: ['workflow', 'preview', 'browser', 'play', 'release', 'publish', 'poll', 'polling', 'wait', 'rollback', 'review', 'activate', 'report', 'timezone', 'rate limit', 'team id', 'game id'], document: workflowsDocument },
   { name: 'updates', summary: 'Stable daily update checks, shared state, stderr advisory shape, npm actions, and opt-out.', keywords: ['update', 'upgrade', 'npm', 'latest', 'experimental', 'dist-tag', 'stderr', 'POKI_CLI_UPDATE_CHECK'], document: updatesDocument }
 ]
 
