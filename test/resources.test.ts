@@ -207,8 +207,13 @@ function gameWithPlaytestRequests (gameId = 'game-1'): Record<string, unknown> {
           game_id: gameId,
           version_id: 'version-1',
           recordings: 3,
-          pending: 2,
-          device_category: 'any',
+          mobile_target: 4,
+          desktop_target: 3,
+          tablet_target: 3,
+          mobile_finished: 2,
+          desktop_finished: 2,
+          tablet_finished: 1,
+          device_categories: ['mobile', 'desktop', 'tablet'],
           categories: '',
           orientation: 'both',
           new_users_only: false,
@@ -223,7 +228,7 @@ function gameWithPlaytestRequests (gameId = 'game-1'): Record<string, unknown> {
           version_id: 'version-2',
           recordings: 1,
           pending: 0,
-          device_category: 'mobile',
+          device_categories: ['mobile'],
           categories: '',
           orientation: 'portrait',
           new_users_only: false,
@@ -540,7 +545,7 @@ void test('mutation adapters build constrained JSON:API documents and enforce de
   const requestDocument = bodies.get('POST /games/game-1/playtest-requests') as unknown as { data: { attributes: Record<string, unknown> } }
   assert.deepEqual(requestDocument.data.attributes, {
     recordings: 10,
-    device_category: 'any',
+    device_categories: ['mobile', 'desktop', 'tablet'],
     orientation: 'both',
     categories: '',
     new_users_only: false,
@@ -917,6 +922,8 @@ void test('playtest request replacement validates then cancels and recreates wit
   ])
   const attributes = (replacementBody as unknown as { data: { attributes: Record<string, unknown> } }).data.attributes
   assert.equal(attributes.recordings, 5)
+  assert.deepEqual(attributes.device_categories, ['mobile', 'desktop', 'tablet'])
+  assert.equal(attributes.device_category, undefined)
   assert.equal(attributes.version_id, 'version-1')
   assert.equal(attributes.orientation, 'portrait')
   assert.deepEqual(JSON.parse(result.stdout), {
@@ -1276,6 +1283,25 @@ void test('Player Fit methodology defaults, legacy selection, and invalid versio
   assert.equal(JSON.parse(data.stdout).request.body.data.attributes.test_version, 1)
   for (const data of [{ test_version: 3 }, { test_version: '1' }, { test_version: 1, device_categories: ['tablet'] }, { test_version: 1, device_categories: ['mobile'] }]) {
     const result = await runCli([...args, '--data', JSON.stringify(data)])
+    assert.equal(result.code, 2, result.stdout)
+  }
+})
+
+void test('playtest creation maps legacy flags to device arrays and accepts explicit selections', async () => {
+  const args = ['playtest-requests', 'create', '--game', 'game-1', '--version', 'version-1', '--new-users-only', 'true', '--normal-tile', 'false', '--format', 'json', '--dry-run']
+  for (const device of ['any', 'mobile', 'desktop', 'tablet']) {
+    const result = await runCli([...args, '--device-category', device])
+    assert.equal(result.code, 0, result.stderr)
+    const attributes = JSON.parse(result.stdout).request.body.data.attributes
+    assert.deepEqual(attributes.device_categories, device === 'any' ? ['mobile', 'desktop', 'tablet'] : [device])
+    assert.equal(attributes.device_category, undefined)
+    assert.equal(attributes.new_users_only, true)
+  }
+  const selected = await runCli([...args.slice(0, 6), '--data', JSON.stringify({ device_categories: ['mobile', 'tablet'] }), '--format', 'json', '--dry-run'])
+  assert.equal(selected.code, 0, selected.stderr)
+  assert.deepEqual(JSON.parse(selected.stdout).request.body.data.attributes.device_categories, ['mobile', 'tablet'])
+  for (const devices of [[], ['any'], ['mobile', 'mobile'], 'mobile']) {
+    const result = await runCli(['playtest-requests', 'create', '--game', 'game-1', '--version', 'version-1', '--data', JSON.stringify({ device_categories: devices }), '--format', 'json', '--dry-run'])
     assert.equal(result.code, 2, result.stdout)
   }
 })

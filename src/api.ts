@@ -65,6 +65,7 @@ export function apiResponseError (status: number, body: unknown, headers: Header
   // payload and therefore collapse to the stable HTTP status contract.
   const sourceCode = firstErrorCode ?? `HTTP_${status}`
   const normalizedCode = sourceCode.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase()
+  const payloadValidationFailed = firstErrorCode === 'payload-validation-failed'
   const explicitPermissionDenied = status === 403 && firstErrorCode === 'permission-denied'
   const code = explicitPermissionDenied
     ? 'PERMISSION_DENIED'
@@ -84,13 +85,13 @@ export function apiResponseError (status: number, body: unknown, headers: Header
   const retrySafe = method === 'GET' || request.retrySafe === true
   const transient = status === 408 || status === 429 || status >= 500
   const redirect = status >= 300 && status < 400
-  return new CliError(code, message, status === 401 ? 3 : status >= 500 ? 5 : 4, {
+  return new CliError(code, message, status === 401 && !payloadValidationFailed ? 3 : status >= 500 ? 5 : 4, {
     status,
     ...(Object.keys(safeDetails).length === 0 ? {} : { details: safeDetails }),
     retryable: transient && retrySafe,
     requestId: headers.get('x-request-id') ?? headers.get('x-cloud-trace-context') ?? undefined,
     retryAfter: headers.get('retry-after') ?? undefined,
-    ...(status === 401
+    ...(status === 401 && !payloadValidationFailed
       ? { hint: AUTH_REQUIRED_HINT }
       : (transient || redirect) && !retrySafe
           ? { hint: `The ${method} outcome may be unknown. Read the resource state before deciding whether to retry this mutation.` }
@@ -149,7 +150,9 @@ export class ApiClient {
     this.inMemoryAuth = config
 
     let response = await this.execute<T>(request, config.access_token)
-    if (response.status === 401) {
+    // The API also uses 401 for disallowed payload fields. These are validation
+    // failures, not expired credentials, and must not refresh or replay.
+    if (response.status === 401 && safeApiErrorResponse(response.body).errors?.[0]?.code !== 'payload-validation-failed') {
       if (config.refresh_token !== undefined) {
         try {
           const refreshed = decodeBearerCredentials(await this.refreshAuth(config))
@@ -167,7 +170,7 @@ export class ApiClient {
           throw authRequired('Authentication expired and could not be refreshed.')
         }
       }
-      if (response.status === 401) throw authRequired('Authentication was rejected by the Poki API.')
+      if (response.status === 401 && safeApiErrorResponse(response.body).errors?.[0]?.code !== 'payload-validation-failed') throw authRequired('Authentication was rejected by the Poki API.')
     }
 
     if (response.status < 200 || response.status >= 300) {

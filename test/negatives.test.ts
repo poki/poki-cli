@@ -33,8 +33,8 @@ void test('invalid enum values are rejected locally with the valid choices named
       pattern: /Choices:.*"active".*"archived".*"all"/s
     },
     {
-      args: ['playtest-requests', 'create', '--version', 'v', '--device-category', 'tablet', '--game', 'g', '--format', 'json'],
-      pattern: /Choices:.*"any".*"desktop".*"mobile"/s
+      args: ['playtest-requests', 'create', '--version', 'v', '--device-category', 'console', '--game', 'g', '--format', 'json'],
+      pattern: /Choices:.*"any".*"mobile".*"desktop".*"tablet"/s
     },
     {
       args: ['playtest-requests', 'create', '--version', 'v', '--orientation', 'sideways', '--game', 'g', '--format', 'json'],

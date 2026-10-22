@@ -8,7 +8,7 @@ import { jsonApiDocument, unreadableFields, unreadableFieldsReport } from '../js
 import { isRecord } from '../json'
 import { writeStructured } from '../output'
 import { getProjectGameId } from '../project'
-import { audienceInputFromFlags } from './audience-input'
+import { playerFitDeviceCategories } from './audience-input'
 import { registerResourceDiscovery } from './resource-docs'
 import {
   gamePath,
@@ -25,10 +25,10 @@ import {
   withGameMutationOptions,
   withListViewOptions
 } from './common'
-import { createPlaytestRequest, playtestRequestInput, validatePlaytestRequestData, withPlaytestRequestOptions } from './playtests'
+import { createPlaytestRequest, playtestAudienceInputFromFlags, playtestRequestInput, validatePlaytestRequestData, withPlaytestRequestOptions } from './playtests'
 
 function editFlags (argv: Record<string, unknown>): Record<string, unknown> {
-  const data: Record<string, unknown> = audienceInputFromFlags(argv)
+  const data: Record<string, unknown> = playtestAudienceInputFromFlags(argv)
   if (argv.recordings !== undefined) data.recordings = argv.recordings
   if (argv.newUsersOnly !== undefined) data.new_users_only = argv.newUsersOnly
   if (argv.normalTile !== undefined) data.normal_tile = argv.normalTile
@@ -195,11 +195,12 @@ export function registerPlaytestRequestCommands (yargs: Argv, api: ApiClient): A
       }
 
       const replacement: Record<string, unknown> = {
-        // recordings counts the not-yet-started recordings and pending the ones
-        // in progress, so their sum is what the original request still owes.
-        // Delivered recordings appear in neither field and are not recreated.
-        recordings: Number(current.recordings ?? 0) + Number(current.pending ?? 0),
-        device_category: current.device_category ?? 'any',
+        // Targets minus finished includes both unstarted and in-progress work.
+        // Retain the legacy count fallback for older API responses.
+        recordings: playerFitDeviceCategories.some(device => current[`${device}_target`] !== undefined)
+          ? playerFitDeviceCategories.reduce((total, device) => total + Math.max(0, Number(current[`${device}_target`] ?? 0) - Number(current[`${device}_finished`] ?? 0)), 0)
+          : Number(current.recordings ?? 0) + Number(current.pending ?? 0),
+        device_categories: current.device_categories ?? [...playerFitDeviceCategories],
         categories: current.categories ?? '',
         orientation: current.orientation ?? 'both',
         new_users_only: current.new_users_only ?? false,

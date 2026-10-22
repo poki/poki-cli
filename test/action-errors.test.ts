@@ -55,7 +55,7 @@ function playtestGame (): Record<string, unknown> {
           version_id: 'V',
           recordings: 3,
           pending: 2,
-          device_category: 'any',
+          device_categories: ['mobile', 'desktop', 'tablet'],
           categories: '',
           orientation: 'both',
           new_users_only: false,

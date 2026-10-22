@@ -13,7 +13,7 @@ import {
   applyAudienceInputDefaults,
   audienceInputFromFlags,
   audienceOrientations,
-  deviceCategories,
+  playerFitDeviceCategories,
   validateAudienceInput
 } from './audience-input'
 import {
@@ -43,18 +43,26 @@ import {
 // commands share one declaration rather than keeping a second copy in step.
 export const playtestRequestInput = mutationInputFields({
   recordings: 'recordings',
-  deviceCategory: 'device_category',
+  deviceCategory: 'device_categories',
   category: 'categories',
   orientation: 'orientation',
   newUsersOnly: 'new_users_only',
   normalTile: 'normal_tile'
 })
 
+export function playtestAudienceInputFromFlags (argv: Record<string, unknown>, defaults = false): Record<string, unknown> {
+  const device = argv.deviceCategory
+  return audienceInputFromFlags({
+    ...argv,
+    deviceCategory: device === 'any' ? [...playerFitDeviceCategories] : device
+  }, { defaults, multipleDevices: true })
+}
+
 export function validatePlaytestRequestData (data: Record<string, unknown>): void {
   if (typeof data.recordings !== 'number' || !Number.isInteger(data.recordings) || data.recordings < 1 || data.recordings > 10) {
     throw inputError('recordings must be an integer from 1 through 10.')
   }
-  validateAudienceInput(data)
+  validateAudienceInput(data, { multipleDevices: true })
   for (const field of ['new_users_only', 'normal_tile']) {
     if (data[field] !== undefined && typeof data[field] !== 'boolean') throw inputError(`${field} must be a boolean.`)
   }
@@ -63,12 +71,12 @@ export function validatePlaytestRequestData (data: Record<string, unknown>): voi
 async function buildPlaytestRequestData (argv: Record<string, unknown>): Promise<Record<string, unknown>> {
   const data = await resolveMutationInput(argv, playtestRequestInput, () => ({
     recordings: argv.recordings ?? 10,
-    ...audienceInputFromFlags(argv, { defaults: true }),
+    ...playtestAudienceInputFromFlags(argv, true),
     new_users_only: argv.newUsersOnly ?? false,
     normal_tile: argv.normalTile ?? false
   }))
   data.recordings ??= 10
-  applyAudienceInputDefaults(data)
+  applyAudienceInputDefaults(data, { multipleDevices: true })
   data.new_users_only ??= false
   data.normal_tile ??= false
   validatePlaytestRequestData(data)
@@ -88,7 +96,7 @@ export function withPlaytestRequestOptions (
       demandOption: requireVersion
     })
     .option('recordings', { describe: 'Number of recordings to request (1-10, default 10)', type: 'number' })
-    .option('device-category', { describe: 'Device audience', choices: deviceCategories })
+    .option('device-category', { describe: 'Device audience', choices: ['any', ...playerFitDeviceCategories] })
     .option('orientation', { describe: 'Required screen orientation', choices: audienceOrientations })
     .option('category', { describe: 'Numeric audience category ID; repeat for multiple categories', type: 'array', string: true })
     .option('new-users-only', { describe: 'Only recruit new users', type: 'boolean' })

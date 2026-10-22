@@ -854,3 +854,38 @@ void test('safeErrorCause omits arbitrary command details while preserving recov
   })
   assert.doesNotMatch(JSON.stringify(cause), /secret|arbitrary/)
 })
+
+void test('401 payload validation errors preserve details without prompting login or replaying the mutation', async () => {
+  for (const expiresFirst of [false, true]) {
+    let requests = 0
+    let refreshes = 0
+    const api = new ApiClient('https://example.invalid', {
+      fetch: (async () => {
+        requests++
+        return jsonResponse(401, {
+          errors: [{
+            code: expiresFirst && requests === 1 ? 'unauthorized' : 'payload-validation-failed',
+            detail: 'change to device_category is not allowed'
+          }]
+        })
+      }) as typeof fetch,
+      readAuth: () => ({ access_type: 'Bearer', access_token: 'old-token', refresh_token: 'refresh-token' }),
+      refreshAuth: async config => {
+        refreshes++
+        return { ...config, access_token: 'new-token' }
+      }
+    })
+    await assert.rejects(api.request({ method: 'POST', path: '/games/g/playtest-requests', body: {} }), (error: unknown) => {
+      assert.ok(error instanceof CliError)
+      assert.equal(error.code, 'PAYLOAD_VALIDATION_FAILED')
+      assert.equal(error.message, 'change to device_category is not allowed')
+      assert.equal(error.status, 401)
+      assert.equal(error.exitCode, 4)
+      assert.equal(error.hint, undefined)
+      assert.equal(error.retryable, false)
+      return true
+    })
+    assert.equal(requests, expiresFirst ? 2 : 1)
+    assert.equal(refreshes, expiresFirst ? 1 : 0)
+  }
+})

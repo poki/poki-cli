@@ -436,7 +436,7 @@ export function availableCommands (path: readonly string[]): { groupPath: string
 
 function retryContract (spec: CommandSpec): Record<string, unknown> {
   return {
-    automatic_after_401_refresh: 'The request is replayed once; a 401 rejection happens before the request executes, so a mutation cannot double-apply.',
+    automatic_after_401_refresh: 'An authentication 401 is replayed once after token refresh. A 401 payload-validation-failed error is surfaced directly without refreshing or replaying.',
     automatic_otherwise: false,
     safe_to_retry_after_failure: spec.retry_safe ?? false
   }
