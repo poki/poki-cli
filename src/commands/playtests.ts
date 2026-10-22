@@ -150,6 +150,8 @@ function recordingUrls (id: string): Record<'video_url' | 'metadata_json_url', s
 
 function decorateRecordingResource (resource: unknown, raw: boolean): unknown {
   if (!isRecord(resource) || resource.type !== 'playtest_recordings' || typeof resource.id !== 'string' || resource.id.trim() === '') return resource
+  const state = raw && isRecord(resource.attributes) ? resource.attributes.state : resource.state
+  if (state != null && state !== 'done') return resource
   const urls = recordingUrls(resource.id)
   if (!raw) return { ...resource, ...urls }
 

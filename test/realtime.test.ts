@@ -55,17 +55,17 @@ void test('realtime errors sends a sorted deduplicated batch without requiring a
   assert.equal(calls, 1)
 })
 
-void test('realtime C2P preserves nullable minute buckets and the service polling recommendation', async t => {
+void test('realtime C2P preserves nullable ten-minute buckets and the service polling recommendation', async t => {
   const directory = temporaryDirectory(t, 'realtime-c2p')
   writeFileSync(join(directory, 'poki.json'), JSON.stringify({ game_id: 'game-id' }))
-  const minutes = Array.from({ length: 1440 }, (_value, index) => index === 1439 ? { pageviews: 8, gameplays: 3 } : null)
+  const intervals = Array.from({ length: 144 }, (_value, index) => index === 143 ? { visitors: 8, players: 3 } : null)
   const realtimeUrl = await listen(t, createServer((req, res) => {
     void (async () => {
       assert.equal(req.method, 'POST')
       assert.equal(req.url, '/metrics/c2p')
       assert.equal(req.headers['content-type'], 'application/json')
       assert.deepEqual(await requestBody(req), ['game-id'])
-      jsonApi(res, { metrics: { 'game-id': minutes }, retry_in_seconds: 2 })
+      jsonApi(res, { metrics: { 'game-id': intervals }, retry_in_seconds: 2 })
     })()
   }))
   const env = { ...authEnvironment(directory), POKI_CLI_TEST_REALTIME_URL: realtimeUrl }
@@ -73,7 +73,7 @@ void test('realtime C2P preserves nullable minute buckets and the service pollin
     const result = await runCli(['realtime', 'c2p', '--format', format], { cwd: directory, env })
     assert.equal(result.code, 0, result.stderr)
     const output = format === 'json' ? JSON.parse(result.stdout) : parseToon(result.stdout)
-    assert.deepEqual(output, { metrics: { 'game-id': minutes }, retry_in_seconds: 2 })
+    assert.deepEqual(output, { metrics: { 'game-id': intervals }, retry_in_seconds: 2 })
   }
 })
 
@@ -104,7 +104,7 @@ void test('realtime does not report missing or malformed metrics as successful e
     ['users', { metrics: { g: -1 } }], ['users', { metrics: { g: '42' } }],
     ['users', { metrics: { g: 0 }, retry_in_seconds: '2' }],
     ['errors', { metrics: { v: [null] } }],
-    ['c2p', { metrics: { g: [null, { pageviews: 4 }] } }]
+    ['c2p', { metrics: { g: [null, { visitors: 4 }] } }]
   ] as Array<[string, unknown]>) {
     payload = body
     const option = metric === 'errors' ? ['--version', 'v'] : ['--game', 'g']

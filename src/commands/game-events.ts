@@ -31,7 +31,7 @@ import {
 const eventFlags = ['category', 'action', 'label', 'description', 'enabled', 'includeInFunnel'] as const
 const eventUpdateInput: MutationInputFields = { flags: eventFlags, fields: ['category', 'action', 'label', 'enabled', 'description', 'include_in_funnel'] }
 // Create omits the two configuration fields: the server always enables a new
-// event and includes it in funnels.
+// event and includes only the first ten definitions per game in funnels.
 const eventCreateInput: MutationInputFields = { flags: eventFlags, fields: ['category', 'action', 'label', 'description'] }
 const funnelInput = mutationInputFields({ title: 'title', event: 'events' })
 
@@ -68,7 +68,7 @@ async function eventData (argv: Record<string, unknown>, create: boolean): Promi
 
 function withEventMutation (yargs: Argv, projectGameId: string | undefined, create: boolean): Argv {
   let command = withGameMutationOptions(withDataOption(yargs, create
-    ? 'JSON or TOON backend fields category, action, label, and description; they represent frontend Category, What, and Action respectively, and the server always enables new events and includes them in funnels'
+    ? 'JSON or TOON backend fields category, action, label, and description; they represent frontend Category, What, and Action respectively, and the server always enables new events and includes only the first ten definitions per game in funnels by default'
     : 'JSON or TOON event fields inline, from @file, or stdin'), projectGameId, 'Game that owns the event')
     .option('category', { describe: "Frontend Category; backend field category; 1-64 characters and no '/' or '^'", type: 'string' })
     .option('action', { describe: "Frontend What; legacy backend field action; 1-64 characters and no '/' or '^'", type: 'string' })

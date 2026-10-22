@@ -753,7 +753,7 @@ export function workflowsDocument (): Record<string, unknown> {
       steps: [
         'poki versions upload --label "..." --wait creates the version and blocks until processing reaches done or error (drop --wait to poll manually).',
         'Without --wait: poll poki versions get VERSION_ID until state is done (enum documented at poki versions field state); suggested interval 10-30 seconds with a deadline.',
-        'poki reviews request --version VERSION_ID --developer-notes "..." — the server requires state done.',
+        'poki reviews request --version VERSION_ID --developer-notes "..." — the server requires an approved game and version state done.',
         'Poll poki reviews list --version VERSION_ID until the review status is approved; approval is a human backend workflow and can take days, so use a long explicit deadline and preserve the last status so polling can be resumed.',
         'poki games readiness reports current backend blockers and candidate versions without applying dashboard-only eligibility.',
         'poki versions activate VERSION_ID --yes sends 100 percent of public traffic to the version; use its offline --dry-run first and remember that executable remains unknown until backend execution.'

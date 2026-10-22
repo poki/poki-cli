@@ -23,7 +23,7 @@ function validMetric (metric: RealtimeMetric, value: unknown): boolean {
   if (metric === 'users') return isCount(value)
   if (!Array.isArray(value)) return false
   if (metric === 'errors') return value.every(isCount)
-  return value.every(minute => minute === null || (isRecord(minute) && isCount(minute.pageviews) && isCount(minute.gameplays)))
+  return value.every(interval => interval === null || (isRecord(interval) && isCount(interval.visitors) && isCount(interval.players)))
 }
 
 async function readMetrics (api: ApiClient, metric: RealtimeMetric, ids: string[], argv: Record<string, unknown>): Promise<void> {
@@ -61,7 +61,7 @@ export function registerRealtimeCommands (yargs: Argv, api: ApiClient): Argv {
       const ids = [...new Set((argv.version as unknown[]).map(value => metricId(value, '--version')))].sort()
       await readMetrics(api, 'errors', ids, argv)
     })
-    .command('c2p', 'Read per-minute pageview and converted-pageview counts for one game', c2p => withDefaultGameOption(withRequestOptions(c2p), projectGameId), async argv => {
+    .command('c2p', 'Read ten-minute visitor and playing-user estimates for one game', c2p => withDefaultGameOption(withRequestOptions(c2p), projectGameId), async argv => {
       await readMetrics(api, 'c2p', [metricId(argv.game, '--game')], argv)
     })
     .demandCommand(1, 'Choose realtime users, errors, or c2p.'), () => {})

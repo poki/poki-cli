@@ -13,7 +13,7 @@ export const resourceSummaryFields: Record<ResourceListKind, readonly string[]> 
   // developer-visible list; deriving it keeps the two from drifting, because a
   // stray summary field would silently vanish from output instead of failing.
   'version-files': developerFieldsForKind('version-files'),
-  playtests: ['type', 'id', 'game_id', 'version_id', 'duration', 'device_category', 'watched', 'archived_at', 'created_at', 'video_url', 'metadata_json_url'],
+  playtests: ['type', 'id', 'state', 'game_id', 'version_id', 'duration', 'device_category', 'watched', 'archived_at', 'created_at', 'video_url', 'metadata_json_url'],
   'playtest-requests': ['type', 'id', 'game_id', 'version_id', 'recordings', 'device_categories', 'orientation', 'created_at'],
   'player-fit-tests': ['type', 'id', 'test_version', 'game_id', 'version_id', 'status', 'pageviews', 'started', 'target_count', 'engagement', 'stopped_at', 'created_at'],
   reviews: ['type', 'id', 'version', 'status', 'queue_time', 'seen_by_developer', 'report_submitted_at', 'created_by', 'created_at'],

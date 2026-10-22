@@ -134,11 +134,13 @@ void test('server-backed field corrections stay explicit for agents', () => {
   const funnelCreate = commandSpec(['game-event-funnels', 'create'])
   assert.match(funnelCreate?.options?.find(option => option.name === '--event')?.description ?? '', /Category\^What\^Action.*category\^action\^label/)
 
+  assert.deepEqual(resourceFieldDetails(playtestsDocumentation, 'state')?.enum_values, ['pending', 'encoding', 'done', 'canceled'])
+  assert.match(resourceFieldDetails(gameEventsDocumentation, 'include_in_funnel')?.input_behavior ?? '', /first ten/)
   assert.equal(resourceFieldDetails(playtestsDocumentation, 'tags')?.mutability, 'editable')
   assert.equal(resourceFieldDetails(playtestsDocumentation, 'skipped_assessment')?.mutability, 'editable')
   for (const field of ['video_url', 'metadata_json_url']) {
     const details = resourceFieldDetails(playtestsDocumentation, field)
-    assert.match(details?.details ?? '', /included by both list and get/i)
+    assert.match(details?.details ?? '', /included by list and get only when state is done/i)
     assert.match(details?.interpretation ?? '', /list and get.*--raw.*attributes/i)
   }
   for (const path of [['playtest-recordings', 'list'], ['playtest-recordings', 'get']]) {

@@ -7,6 +7,7 @@ import { apiHarness, jsonApi, runCli } from './helpers'
 void test('game readiness follows the developer-owned track-editor permission branch without review eligibility', () => {
   const game = {
     id: 'game-1',
+    approved: true,
     team_id: 'team-1',
     tracks: [{ track: 'public', version_id: 'old', weight: 100 }],
     versions: [{ id: 'version-1', state: 'done', cached_latest_review_status: 'rejected' }]
@@ -52,6 +53,7 @@ void test('games readiness still reports observed state when an unrelated game a
           id: 'game-1',
           attributes: {
             title: 'Example',
+            approved: true,
             team_id: 'team-1',
             // The CLI requires annotations.engine to be a string, so this one
             // value is unreadable. Dropping the rest of the game with it would
@@ -193,6 +195,7 @@ void test('games readiness reports only visible backend mutation conditions and 
           id: 'game-1',
           attributes: {
             title: 'Example',
+            approved: true,
             team_id: 'team-1',
             uploader_id: 'user-1',
             tracks: [

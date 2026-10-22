@@ -29,6 +29,10 @@ import {
 
 const createInput = mutationInputFields({
   title: 'title',
+  playStoreUrl: 'play_store_url',
+  appleStoreUrl: 'apple_store_url',
+  steamUrl: 'steam_url',
+  thumbnailAbTestId: 'thumbnail_ab_test_id',
   thumbnailFile: 'thumbnail',
   customContentSecurityPolicy: 'custom_content_security_policy',
   cspReason: 'custom_content_security_policy_reasons'
@@ -93,8 +97,12 @@ export function registerGameChangeRequestCommands (yargs: Argv, api: ApiClient):
         hint: 'Run `poki game-change-requests list` to see visible request IDs.'
       }), argv)
     })
-    .command('create', 'Request a title, thumbnail, or custom Content Security Policy change', create => withGameMutationOptions(withDataOption(create, 'JSON or TOON request fields; thumbnail must already be base64'), projectGameId, 'Game to change')
+    .command('create', 'Request a title, thumbnail, store URL, or custom Content Security Policy change', create => withGameMutationOptions(withDataOption(create, 'JSON or TOON request fields; thumbnail must already be base64'), projectGameId, 'Game to change')
       .option('title', { describe: 'Requested public title, 3 through 128 characters', type: 'string' })
+      .option('play-store-url', { describe: 'Google Play app URL; empty string clears it', type: 'string' })
+      .option('apple-store-url', { describe: 'Apple App Store app URL; empty string clears it', type: 'string' })
+      .option('steam-url', { describe: 'Steam app URL; empty string clears it', type: 'string' })
+      .option('thumbnail-ab-test-id', { describe: 'Use the winning thumbnail from a completed A/B test; cannot combine with other changes', type: 'string' })
       .option('thumbnail-file', { describe: 'Image file encoded to the API thumbnail field as base64', type: 'string' })
       .option('custom-content-security-policy', { describe: 'Requested CSP string; use an empty string to remove the custom CSP', type: 'string' })
       .option('csp-reason', { describe: 'CSP source and reason in source=reason form; repeatable; each reason is at most 200 characters', type: 'array', string: true }), async argv => {
@@ -104,6 +112,10 @@ export function registerGameChangeRequestCommands (yargs: Argv, api: ApiClient):
       const data = await resolveMutationInput(argv, createInput, () => {
         thumbnail = argv.thumbnailFile === undefined ? undefined : thumbnailFromFile(String(argv.thumbnailFile))
         return {
+          ...(argv.playStoreUrl === undefined ? {} : { play_store_url: argv.playStoreUrl }),
+          ...(argv.appleStoreUrl === undefined ? {} : { apple_store_url: argv.appleStoreUrl }),
+          ...(argv.steamUrl === undefined ? {} : { steam_url: argv.steamUrl }),
+          ...(argv.thumbnailAbTestId === undefined ? {} : { thumbnail_ab_test_id: argv.thumbnailAbTestId }),
           ...(argv.title === undefined ? {} : { title: argv.title }),
           ...(thumbnail === undefined ? {} : { thumbnail: thumbnail.value }),
           ...(argv.customContentSecurityPolicy === undefined ? {} : { custom_content_security_policy: argv.customContentSecurityPolicy }),
@@ -121,8 +133,28 @@ export function registerGameChangeRequestCommands (yargs: Argv, api: ApiClient):
           throw inputError('custom_content_security_policy_reasons must map non-empty sources to strings of at most 200 characters.')
         }
       }
-      if (data.title === undefined && data.thumbnail === undefined && data.custom_content_security_policy === undefined) {
-        throw inputError('At least title, thumbnail, or custom_content_security_policy is required.')
+      for (const [field, pattern] of [
+        ['play_store_url', /^https:\/\/play\.google\.com\/store\/apps\/details\?([^#]*&)?id=[A-Za-z0-9._]+(&[^#]*)?$/],
+        ['apple_store_url', /^https:\/\/apps\.apple\.com\/([a-z]{2}\/)?app\/([^/?#]+\/)?id[0-9]+([/?#].*)?$/],
+        ['steam_url', /^https:\/\/store\.steampowered\.com\/app\/[0-9]+(\/[^?#]*)?([?#].*)?$/]
+      ] as const) {
+        const value = data[field]
+        if (value === undefined) continue
+        if (typeof value !== 'string' || (value.trim() !== '' && !pattern.test(value.trim()))) {
+          throw inputError(`${field} must be a valid store app URL or an empty string to clear it.`)
+        }
+        data[field] = value.trim()
+      }
+      if (data.thumbnail_ab_test_id !== undefined) {
+        if (typeof data.thumbnail_ab_test_id !== 'string' || data.thumbnail_ab_test_id.trim() === '') {
+          throw inputError('thumbnail_ab_test_id must be a non-empty test ID.')
+        }
+        if (Object.keys(data).some(field => field !== 'thumbnail_ab_test_id')) {
+          throw inputError('thumbnail_ab_test_id cannot be combined with other changes.')
+        }
+      }
+      if (!['title', 'thumbnail', 'custom_content_security_policy', 'play_store_url', 'apple_store_url', 'steam_url', 'thumbnail_ab_test_id'].some(field => data[field] !== undefined)) {
+        throw inputError('At least one title, thumbnail, store URL, or custom_content_security_policy change is required.')
       }
       const path = pathFor(argv.game)
       const body = jsonApiDocument('game_change_requests', data)

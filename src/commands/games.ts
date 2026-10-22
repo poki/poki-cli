@@ -31,6 +31,8 @@ import {
 } from './common'
 
 const updateInput = mutationInputFields({
+  archived: 'archived',
+  favorite: 'favorite',
   engine: 'annotations',
   privacyPolicyUrl: 'privacy_policy_url',
   suggestedDescription: 'suggested_description',
@@ -54,6 +56,9 @@ function validateAnnotations (value: unknown): void {
 }
 
 function validateGameMutationData (data: Record<string, unknown>): void {
+  for (const field of ['archived', 'favorite'] as const) {
+    if (data[field] !== undefined && typeof data[field] !== 'boolean') throw inputError(`${field} must be a boolean.`)
+  }
   for (const field of ['suggested_description', 'suggested_categories'] as const) {
     if (data[field] !== undefined && typeof data[field] !== 'string') throw inputError(`${field} must be a string.`)
   }
@@ -69,7 +74,7 @@ function validateGameMutationData (data: Record<string, unknown>): void {
 // hidden by a resource collapsed to its identity, is unknown: reporting it as
 // `blocked` would state a condition the CLI never observed.
 const readinessStateFields: Readonly<Record<string, readonly string[]>> = {
-  games: ['team_id', 'team', 'uploader_id', 'uploader', 'tracks', 'versions', 'playtest_requests'],
+  games: ['approved', 'archived', 'content_metadata', 'team_id', 'team', 'uploader_id', 'uploader', 'tracks', 'versions', 'playtest_requests'],
   users: ['team_id', 'team'],
   game_versions: ['state', 'cached_latest_review_status'],
   playtest_requests: ['version_id', 'version']
@@ -95,6 +100,8 @@ function unreadableReadinessFields (resource: ExpectedJsonApiResourceResult, typ
 function gameFlags (argv: Record<string, unknown>): Record<string, unknown> {
   const data: Record<string, unknown> = {}
   const mappings: Array<[string, string]> = [
+    ['archived', 'archived'],
+    ['favorite', 'favorite'],
     ['privacyPolicyUrl', 'privacy_policy_url'],
     ['suggestedDescription', 'suggested_description']
   ]
@@ -121,6 +128,8 @@ async function mutationData (
 
 function withGameFieldOptions (yargs: Argv): Argv {
   return withDataOption(withMutationOptions(withOutputOptions(yargs)), 'JSON or TOON object, @file, or - for stdin; mutually exclusive with field flags')
+    .option('archived', { describe: 'Archive the game; use --no-archived to restore it', type: 'boolean' })
+    .option('favorite', { describe: 'Favorite the game for the current user; use --no-favorite to remove it', type: 'boolean' })
     .option('engine', {
       describe: 'Developer-editable engine annotation: 2-32 lowercase letters, digits, or hyphens; the server preserves every other annotation',
       type: 'string'

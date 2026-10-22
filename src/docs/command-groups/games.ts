@@ -4,6 +4,8 @@ import type { CommandSpecBuilder } from './types'
 export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDiscovery, dataOption, example, formatOption, gameOption, group, listOptionsFor, mutationOptions, option, outputOptions, requestOptions }: CommandSpecBuilder): void {
   group('games', 'List, inspect, assess readiness, and update games.')
   const gameFieldOptions = [
+    option('--archived', 'boolean', 'Archive the game; --no-archived restores it. Archiving is blocked during a requested or running Web Fit test.'),
+    option('--favorite', 'boolean', 'Favorite for the current user only; --no-favorite removes it.'),
     option('--engine', 'string', 'Developer-editable engine annotation: 2-32 lowercase letters, digits, or hyphens; the server preserves every other annotation.'),
     option('--privacy-policy-url', 'string', 'Public privacy-policy URL.'),
     option('--suggested-description', 'string', 'Developer-suggested public game description.'),
@@ -43,7 +45,8 @@ export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDis
       arguments: [argument('game-id', 'Game ID; defaults to project game_id.', false)],
       options: [option('--game', 'string', 'Game ID; alternative to the positional game-id.'), ...gameFieldOptions, dataOption, ...mutationOptions],
       behavior: [
-        'Title and thumbnail are not developer-editable here; use game-change-requests create.',
+        'Title, thumbnail, and store URLs are changed through game-change-requests create.',
+        'Archive state is shared; favorites belong only to the current user. Use --no-archived or --no-favorite to reverse either setting. Archiving is blocked while Web Fit is requested or running.',
         '--engine sends only annotations.engine in the PATCH; the server preserves every other annotation key.',
         gameDataShapeBehavior
       ],

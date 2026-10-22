@@ -30,12 +30,12 @@ export function addRealtimeCommandSpecs ({ apiAction, example, gameOption, group
     examples: [example('poki realtime errors --version VERSION_ID', 'Read one version’s error counts.'), example('poki realtime errors --version VERSION_ID_1 --version VERSION_ID_2 --format json', 'Read two versions in one batch.')],
     missing_input: '--version'
   })
-  apiAction(['realtime', 'c2p'], 'Read per-minute pageview and converted-pageview counts for one game.', { method: 'POST', path: 'https://realtime.poki.com/metrics/c2p', contacts_api: true }, ['can_read_owned_games'], {
+  apiAction(['realtime', 'c2p'], 'Read ten-minute visitor and playing-user estimates for one game.', { method: 'POST', path: 'https://realtime.poki.com/metrics/c2p', contacts_api: true }, ['can_read_owned_games'], {
     options: [gameOption, ...requestOptions],
     risk: 'read_only',
     retry_safe: true,
-    output: { ...output, metrics: 'Each game ID maps to 1440 minute buckets, oldest to newest. Each bucket is null or {pageviews, gameplays}; gameplays counts pageviews that converted to gameplay, not all gameplay sessions.' },
-    behavior: [...behavior, 'Sends a JSON array containing the selected game ID.', 'Null buckets mean no pageviews or unavailable history; they are preserved as null. Recent counts are provisional and the current minute is incomplete. The service supplies no bucket timestamps; the CLI does not invent them.'],
-    examples: [example('poki realtime c2p --game GAME_ID', 'Read the game’s pageview conversion counts.'), example('poki realtime c2p --format json', 'Use the project game and JSON output.')]
+    output: { ...output, metrics: 'Each game ID maps to 144 ten-minute buckets, oldest to newest. Each bucket is null or {visitors, players}; these are estimated distinct users and distinct users who converted to gameplay within each ten-minute interval, not pageview or session counts.' },
+    behavior: [...behavior, 'Sends a JSON array containing the selected game ID.', 'Null buckets mean no visitors or unavailable history; they are preserved as null. Recent counts are provisional and the newest interval is incomplete. The service supplies no bucket timestamps; the CLI does not invent them.'],
+    examples: [example('poki realtime c2p --game GAME_ID', 'Read the game’s visitor and playing-user estimates.'), example('poki realtime c2p --format json', 'Use the project game and JSON output.')]
   })
 }
