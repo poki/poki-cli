@@ -217,6 +217,21 @@ void test('API 4xx, 5xx, and transport failures use their documented exit classe
     return error instanceof CliError && error.code === 'NETWORK_ERROR' && error.exitCode === 5
   })
 
+  const lobbyValidation = clientFor((async () => jsonResponse(400, {
+    errors: [{ status: '400', code: 'invalid-lobby-filter', title: 'A lobby filter value is invalid or out of range for its field.' }]
+  })) as typeof fetch)
+  await assert.rejects(lobbyValidation.request({ path: '/games/game-1/netlib/lobbies' }), (error: unknown) => {
+    assert.ok(error instanceof CliError)
+    assert.equal(error.code, 'INVALID_LOBBY_FILTER')
+    assert.equal(error.status, 400)
+    assert.equal(error.exitCode, 4)
+    assert.equal(error.retryable, false)
+    assert.match(error.message, /filter value/)
+    assert.match(error.hint ?? '', /netlib-lobbies fields/)
+    assert.match(error.hint ?? '', /before retrying/)
+    return true
+  })
+
   const validationError = clientFor((async () => jsonResponse(400, {
     error: 'private-backend-error-code',
     message: 'private backend validation text',

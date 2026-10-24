@@ -80,6 +80,7 @@ export function validateAudienceInput (
   if (typeof data.categories !== 'string' || (data.categories !== '' && !/^\d+(,\d+)*$/.test(data.categories))) {
     throw inputError('categories must be a comma-separated list of integer IDs.')
   }
+  if (data.categories.length > 512) throw inputError('categories must contain at most 512 characters including commas.')
   const limit = options.categoryLimit
   if (limit !== undefined && data.categories !== '' && data.categories.split(',').length > limit.max) {
     throw inputError(limit.message)

@@ -3,7 +3,6 @@ import type { Argv } from 'yargs'
 import { ApiClient } from '../api'
 import { playerFeedbackQuestionsDocumentation } from '../docs/resources'
 import { CliError, inputError } from '../errors'
-import { characterCount, containsZeroWidthCharacter } from '../input'
 import { jsonApiDocument } from '../jsonapi'
 import { isRecord } from '../json'
 import { listCapabilities } from '../list-capabilities'
@@ -104,7 +103,12 @@ const createWaitContract: AsyncCreateContract = {
 }
 
 function unixDate (value: unknown, field: string): number {
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0 || value > 253402300799) {
+      throw inputError(`${field} must be an integer Unix timestamp between 0 and 253402300799 (9999-12-31 UTC).`)
+    }
+    return value
+  }
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw inputError(`${field} must be a UTC calendar date in YYYY-MM-DD format or an integer Unix timestamp.`)
   }
@@ -112,6 +116,7 @@ function unixDate (value: unknown, field: string): number {
   if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString().slice(0, 10) !== value) {
     throw inputError(`${field} must be a real UTC calendar date in YYYY-MM-DD format.`)
   }
+  if (value < '1000-01-01') throw inputError(`${field} must be a UTC calendar date between 1000-01-01 and 9999-12-31.`)
   return Math.floor(milliseconds / 1000)
 }
 
@@ -133,9 +138,9 @@ export function registerPlayerFeedbackQuestionCommands (yargs: Argv, api: ApiCli
       render(await getResource(api, questionPath(argv.game, questionID), argv, { type: 'player_feedback_questions', id: questionID }, 'player-feedback question read'), argv)
     })
     .command('create', 'Queue a question over a bounded player-feedback date range', create => withWaitOptions(withGameMutationOptions(withDataOption(create, 'JSON or TOON object containing question, start_date, end_date, and feedback_message_types'), projectGameId, 'Game whose feedback to analyze'), 'After creation, poll until status reaches completed; failed exits nonzero with the final resource')
-      .option('question', { describe: 'Required natural-language question, up to 10000 characters', type: 'string' })
-      .option('start-date', { describe: 'Required inclusive UTC date in YYYY-MM-DD format; sent as Unix seconds', type: 'string' })
-      .option('end-date', { describe: 'Required inclusive UTC date in YYYY-MM-DD format; sent as Unix seconds and must not precede start-date', type: 'string' })
+      .option('question', { describe: 'Required natural-language question, up to 10000 UTF-8 bytes', type: 'string' })
+      .option('start-date', { describe: 'Required inclusive UTC date in YYYY-MM-DD format (years 1000-9999); sent as Unix seconds', type: 'string' })
+      .option('end-date', { describe: 'Required inclusive UTC date in YYYY-MM-DD format (years 1000-9999); sent as Unix seconds and must not precede start-date', type: 'string' })
       .option('message-type', { describe: 'Feedback type; repeat one or more times', choices: messageTypes, type: 'array' }), async argv => {
       const data = await resolveMutationInput(argv, createInput, () => ({
         question: argv.question,
@@ -143,8 +148,7 @@ export function registerPlayerFeedbackQuestionCommands (yargs: Argv, api: ApiCli
         end_date: argv.endDate,
         feedback_message_types: asStrings(argv.messageType)
       }))
-      if (typeof data.question !== 'string' || data.question.trim() === '' || characterCount(data.question) > 10000) throw inputError('question must contain 1 through 10000 characters.')
-      if (containsZeroWidthCharacter(data.question)) throw inputError('question must not contain zero-width characters.')
+      if (typeof data.question !== 'string' || data.question.trim() === '' || Buffer.byteLength(data.question, 'utf8') > 10000) throw inputError('question must contain 1 through 10000 UTF-8 bytes.')
       const startDate = unixDate(data.start_date, 'start_date')
       const endDate = unixDate(data.end_date, 'end_date')
       if (endDate < startDate) throw inputError('end_date must be on or after start_date.')

@@ -574,8 +574,8 @@ export function registerDataCommands (yargs: Argv, api: ApiClient): Argv {
       .option('limit', { describe: 'Override or set the query row limit', type: 'number' })
       .option('offset', { describe: 'Override or set the query row offset', type: 'number' })
       .check(argv => {
-        if (argv.limit !== undefined && (!Number.isInteger(argv.limit) || Number(argv.limit) < 1)) throw inputError('--limit must be a positive integer.')
-        if (argv.offset !== undefined && (!Number.isInteger(argv.offset) || Number(argv.offset) < 0)) throw inputError('--offset must be a non-negative integer.')
+        if (argv.limit !== undefined && (!Number.isSafeInteger(argv.limit) || Number(argv.limit) < 1)) throw inputError('--limit must be a positive integer no greater than 9007199254740991.')
+        if (argv.offset !== undefined && (!Number.isSafeInteger(argv.offset) || Number(argv.offset) < 0)) throw inputError('--offset must be a non-negative integer no greater than 9007199254740991.')
         return true
       }), async argv => {
       const { query } = resolveRecipe(String(argv.name), argv, projectGameId)

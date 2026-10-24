@@ -242,7 +242,7 @@ void test('normalized JSON:API output exposes only reviewed backend document met
   assert.deepEqual(normalized.meta, {
     total: 1,
     failed,
-    permissions: ['can_read_self']
+    permissions: ['can_read_self', 'can_request_web_fit_test']
   })
 })
 

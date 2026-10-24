@@ -2,11 +2,14 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import test from 'node:test'
 
+import { validateListQuery } from '../src/query'
 import { listCapabilities } from '../src/list-capabilities'
 import { apiHarness, authEnvironment, jsonApi, listen, runCli, temporaryDirectory } from './helpers'
 
 void test('server collection capabilities stay pinned', () => {
-  assert.deepEqual(listCapabilities, {
+  assert.deepEqual(Object.fromEntries(Object.entries(listCapabilities).map(([name, { filter, sort, pagination }]) => [name, { filter, sort, pagination }])), {
+    gameABTests: { filter: true, sort: false, pagination: false },
+    thumbnailABTests: { filter: true, sort: false, pagination: false },
     mediaKit: { filter: false, sort: false, pagination: false },
     games: { filter: false, sort: true, pagination: true },
     versions: { filter: true, sort: true, pagination: true },
@@ -699,4 +702,24 @@ void test('--all fails closed when numeric pagination repeats a page', async t =
   assert.deepEqual(error.details, { page: 2, page_size: 2, pages_fetched: 2, first_seen_page: 1, pagination: 'numeric' })
   assert.equal(error.retryable, false)
   assert.equal(requests, 2)
+})
+
+void test('list queries enforce endpoint fields and preserve supported filter grammar', () => {
+  for (const filter of ['label=Example', 'label=:Example', 'label=not:Example', 'label=not_in:alpha,beta', 'id|label=Example', 'created_at=after:2026-01-01', 'created_at=between:2026-01-01:2026-02-01', 'archived_at=not:null', 'track=not:public', 'track=public']) {
+    assert.doesNotThrow(() => validateListQuery({ filter: [filter], sort: ['-created_at,label'] }, listCapabilities.versions), filter)
+  }
+  for (const filter of ['label=release:beta', 'label=:release:beta', 'label=between:a', 'label=between:a:null', 'label=unknown:x', 'label=a,,b', 'label=not_in:a,not:b', 'track=beta', 'track=public,beta', 'track=public,not:beta', 'track=before:public', 'track|label=public', 'url=null', 'activated_at=null', 'id||label=x']) {
+    assert.throws(() => validateListQuery({ filter: [filter] }, listCapabilities.versions), /filter|filtered|field=value/i, filter)
+  }
+  assert.throws(() => validateListQuery({ filter: ['label=not_in:a', 'label=not:b'] }, listCapabilities.versions))
+  assert.doesNotThrow(() => validateListQuery({ filter: ['label=not_in:a', 'label=b'] }, listCapabilities.versions))
+  assert.throws(() => validateListQuery({ filter: ['track=public', 'track=beta'] }, listCapabilities.versions))
+  assert.throws(() => validateListQuery({ sort: ['created_at,activated_at'] }, listCapabilities.versions))
+  for (const capabilities of Object.values(listCapabilities)) {
+    if (!('filterFields' in capabilities)) continue
+    const field = capabilities.filterFields[0]
+    assert.throws(() => validateListQuery({ filter: [`${field}=full_like:example`] }, capabilities), /full_like is not supported/)
+  }
+  assert.doesNotThrow(() => validateListQuery({ filter: ['code=abc', 'public=true'], sort: ['-peer_count'] }, listCapabilities.netlibLobbies))
+  assert.doesNotThrow(() => validateListQuery({ filter: ['gameplay.device_category=mobile', 'status=completed'] }, listCapabilities.playerFitTests))
 })

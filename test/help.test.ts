@@ -199,6 +199,8 @@ void test('every command group and action exposes progressive structured help', 
       assert.equal(typeof document.retry.automatic_after_401_refresh, 'string')
       assert.equal(document.retry.automatic_otherwise, false)
       assert.ok(Array.isArray(document.permission_codes), name)
+      assert.ok(typeof document.permission_logic === 'string' && document.permission_logic.length > 0, name)
+      assert.match(document.permission_guidance, /poki whoami.*meta.permissions/, name)
       assert.equal(document.permission_requirements.length, document.permission_codes.length, name)
       for (const requirement of document.permission_requirements) {
         assert.ok(document.permission_codes.includes(requirement.code), name)
@@ -230,7 +232,7 @@ void test('every command group and action exposes progressive structured help', 
   assert.equal(manifestDocument.meta.total, manifestDocument.commands.length)
   assert.ok(manifestDocument.meta.total > 80)
   assert.ok(manifestDocument.commands.every((command: Record<string, unknown>) => typeof command.usage === 'string'))
-  assert.equal(manifestDocument.commands.some((command: { command: string }) => /marketing-assets|ab-tests|poki teams|team-members/.test(command.command)), false)
+  assert.equal(manifestDocument.commands.some((command: { command: string }) => /marketing-assets|poki teams|team-members/.test(command.command)), false)
   assert.equal(manifestDocument.commands.some((command: { command: string }) => command.command === 'poki search' || command.command === 'poki capabilities'), false)
 
   const searched = searchCommandManifest('upload') as Record<string, any>
@@ -306,7 +308,7 @@ void test('the public command contract stays developer-only and omits deferred e
   const manifest = JSON.stringify(commandManifest(true))
   assert.doesNotMatch(manifest, /can_[a-z0-9_]*_all(?:_|\b)/i)
   assert.doesNotMatch(manifest, /\badmin(?:istrator|istrative|-only)?\b/i)
-  assert.doesNotMatch(manifest, /web-?fit|game-?similarit/i)
+  assert.doesNotMatch(manifest, /game-?similarit/i)
 
   const documentedPermissions = [...new Set([...commandSpecs.values()]
     .flatMap(spec => spec.permission_codes ?? []))].sort()
@@ -316,8 +318,10 @@ void test('the public command contract stays developer-only and omits deferred e
   assert.doesNotMatch(paths, /marketing-assets/i)
   assert.ok(commandSpecs.has('media-kit upload'))
   assert.ok(commandSpecs.has('media-kit download'))
-  assert.doesNotMatch(paths, /(?:^|\s)(?:thumbnail-)?ab-tests?(?:\s|$)/i)
-  assert.doesNotMatch(paths, /web-?fit/i)
+  for (const group of ['game-ab-tests', 'thumbnail-ab-tests']) {
+    for (const action of ['list', 'get', 'create', 'update', 'start', 'stop', 'delete']) assert.ok(commandSpecs.has(`${group} ${action}`))
+  }
+  assert.ok(commandSpecs.has('web-fit-tests request'))
   assert.doesNotMatch(paths, /game-?similarit/i)
   assert.ok(commandSpecs.has('netlib-lobbies list'))
 })
@@ -391,6 +395,22 @@ void test('the permission catalog drives the glossary, inline command help, and 
   const activate = helpDocument(['versions', 'activate']) as Record<string, any>
   assert.deepEqual(activate.permission_requirements.map((permission: { code: string }) => permission.code), activate.permission_codes)
   assert.ok(activate.permission_requirements.every((permission: { description: string }) => permission.description.length > 0))
+  assert.match(activate.permission_logic, /AND either.*OR/)
+  assert.match((helpDocument(['versions', 'upload']) as Record<string, any>).permission_logic, /--wait additionally requires/)
+  assert.match((helpDocument(['game-change-requests', 'cancel']) as Record<string, any>).permission_logic, /No named permission/)
+
+  for (const [group, resource] of [['game-ab-tests', 'ab_tests'], ['thumbnail-ab-tests', 'game_thumbnail_ab_tests']]) {
+    for (const action of ['list', 'get', 'create', 'update', 'start', 'stop', 'delete']) {
+      const document = helpDocument([group, action]) as Record<string, any>
+      const code = `can_${['list', 'get'].includes(action) ? 'read' : 'edit'}_owned_${resource}`
+      assert.deepEqual(document.permission_codes, [code])
+      assert.ok(document.permission_logic.startsWith(`${code} AND`))
+      assert.match(document.permission_logic, /authenticated user or their team/)
+    }
+  }
+  const webFit = helpDocument(['web-fit-tests', 'request']) as Record<string, any>
+  assert.deepEqual(webFit.permission_codes, ['can_request_web_fit_test'])
+  assert.match(webFit.permission_logic, /can_request_web_fit_test AND/)
 
   const searched = searchCommandManifest('traffic-track allocation') as Record<string, any>
   assert.ok(searched.commands.some((command: { command: string }) => command.command === 'poki versions activate'))

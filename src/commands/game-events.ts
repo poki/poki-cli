@@ -3,7 +3,7 @@ import type { Argv } from 'yargs'
 import { ApiClient } from '../api'
 import { gameEventFunnelsDocumentation, gameEventsDocumentation } from '../docs/resources'
 import { inputError } from '../errors'
-import { characterCount, containsZeroWidthCharacter, requireChanges } from '../input'
+import { requireChanges } from '../input'
 import { jsonApiDocument } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
 import { getProjectGameId } from '../project'
@@ -29,7 +29,7 @@ import {
 } from './common'
 
 const eventFlags = ['category', 'action', 'label', 'description', 'enabled', 'includeInFunnel'] as const
-const eventUpdateInput: MutationInputFields = { flags: eventFlags, fields: ['category', 'action', 'label', 'enabled', 'description', 'include_in_funnel'] }
+const eventUpdateInput: MutationInputFields = { flags: eventFlags, fields: ['enabled', 'description', 'include_in_funnel'] }
 // Create omits the two configuration fields: the server always enables a new
 // event and includes only the first ten definitions per game in funnels.
 const eventCreateInput: MutationInputFields = { flags: eventFlags, fields: ['category', 'action', 'label', 'description'] }
@@ -49,17 +49,12 @@ async function eventData (argv: Record<string, unknown>, create: boolean): Promi
     ...(argv.includeInFunnel === undefined ? {} : { include_in_funnel: argv.includeInFunnel })
   }))
   requireChanges(data)
-  for (const field of ['category', 'action'] as const) {
-    if (data[field] === undefined && !create) continue
-    if (typeof data[field] !== 'string' || data[field].trim() === '') throw inputError(`${field} must be a non-empty string.`)
-    if (characterCount(data[field]) > 64 || data[field].includes('/') || data[field].includes('^')) throw inputError(`${field} must contain 1 through 64 characters and must not contain '/' or '^'.`)
-    if (containsZeroWidthCharacter(data[field])) throw inputError(`${field} must not contain zero-width characters.`)
+  // The backend owns event identity normalization and content validation.
+  for (const field of ['category', 'action', 'label', 'description']) {
+    if ((create && ['category', 'action', 'description'].includes(field)) || data[field] !== undefined) {
+      if (typeof data[field] !== 'string') throw inputError(`${field} must be a string.`)
+    }
   }
-  if (data.label !== undefined && (typeof data.label !== 'string' || characterCount(data.label) > 64 || data.label.includes('/') || data.label.includes('^'))) throw inputError("label must contain at most 64 characters and must not contain '/' or '^'.")
-  if (typeof data.label === 'string' && containsZeroWidthCharacter(data.label)) throw inputError('label must not contain zero-width characters.')
-  if (data.description !== undefined && (typeof data.description !== 'string' || characterCount(data.description) > 10000)) throw inputError('description must contain at most 10000 characters.')
-  if (typeof data.description === 'string' && containsZeroWidthCharacter(data.description)) throw inputError('description must not contain zero-width characters.')
-  if (create && (typeof data.description !== 'string' || data.description.trim() === '')) throw inputError('description is required.')
   for (const field of ['enabled', 'include_in_funnel'] as const) {
     if (data[field] !== undefined && typeof data[field] !== 'boolean') throw inputError(`${field} must be a boolean.`)
   }
@@ -69,12 +64,14 @@ async function eventData (argv: Record<string, unknown>, create: boolean): Promi
 function withEventMutation (yargs: Argv, projectGameId: string | undefined, create: boolean): Argv {
   let command = withGameMutationOptions(withDataOption(yargs, create
     ? 'JSON or TOON backend fields category, action, label, and description; they represent frontend Category, What, and Action respectively, and the server always enables new events and includes only the first ten definitions per game in funnels by default'
-    : 'JSON or TOON event fields inline, from @file, or stdin'), projectGameId, 'Game that owns the event')
-    .option('category', { describe: "Frontend Category; backend field category; 1-64 characters and no '/' or '^'", type: 'string' })
-    .option('action', { describe: "Frontend What; legacy backend field action; 1-64 characters and no '/' or '^'", type: 'string' })
-    .option('label', { describe: "Frontend Action; legacy backend field label; 0-64 characters and no '/' or '^'", type: 'string' })
+    : 'JSON or TOON description, enabled, and include_in_funnel fields inline, from @file, or stdin'), projectGameId, 'Game that owns the event')
     .option('description', { describe: `${create ? 'Required measurement description' : 'Measurement description'}; document frequency, window, eligibility, units/buckets, denominator, and exclusions; shared across versions`, type: 'string' })
-  if (!create) {
+  if (create) {
+    command = command
+      .option('category', { describe: "Frontend Category; backend field category; 1-64 UTF-8 bytes after numeric normalization and no '/' or '^'", type: 'string' })
+      .option('action', { describe: "Frontend What; legacy backend field action; 1-64 UTF-8 bytes after numeric normalization and no '/' or '^'", type: 'string' })
+      .option('label', { describe: "Frontend Action; legacy backend field label; 0-64 UTF-8 bytes after numeric normalization and no '/' or '^'", type: 'string' })
+  } else {
     command = command
       .option('enabled', { describe: 'Whether analytics should expose the event', type: 'boolean' })
       .option('include-in-funnel', { describe: 'Whether the event may be selected in funnels', type: 'boolean' })
@@ -88,18 +85,16 @@ async function funnelData (argv: Record<string, unknown>, create: boolean): Prom
     ...(argv.event === undefined ? {} : { events: asStrings(argv.event) })
   }))
   requireChanges(data)
-  if ((create || data.title !== undefined) && (typeof data.title !== 'string' || data.title.trim() === '' || characterCount(data.title) > 128)) throw inputError('title must contain 1 through 128 characters.')
-  if (typeof data.title === 'string' && containsZeroWidthCharacter(data.title)) throw inputError('title must not contain zero-width characters.')
-  if ((create || data.events !== undefined) && (!Array.isArray(data.events) || data.events.length < 1 || data.events.length > 50 || data.events.some(event => typeof event !== 'string' || event.trim() === ''))) {
-    throw inputError('events must be an array of 1 through 50 non-empty caret-delimited event keys.')
+  if ((create || data.title !== undefined) && typeof data.title !== 'string') throw inputError('title must be a string.')
+  if ((create || data.events !== undefined) && (!Array.isArray(data.events) || data.events.some(event => typeof event !== 'string'))) {
+    throw inputError('events must be an array of caret-delimited event key strings.')
   }
-  if (Array.isArray(data.events) && data.events.some(event => typeof event === 'string' && containsZeroWidthCharacter(event))) throw inputError('events must not contain zero-width characters.')
   return data
 }
 
 function withFunnelMutation (yargs: Argv, projectGameId: string | undefined): Argv {
   return withGameMutationOptions(withDataOption(yargs, 'JSON or TOON object containing title and caret-delimited event keys'), projectGameId, 'Game that owns the funnel')
-    .option('title', { describe: 'Funnel title, up to 128 characters', type: 'string' })
+    .option('title', { describe: 'Funnel title, up to 128 UTF-8 bytes', type: 'string' })
     .option('event', { describe: "Ordered frontend Category^What^Action key from funnel analytics, sourced from backend category^action^label; '^' is the separator; repeat in traversal order", type: 'array', string: true })
 }
 

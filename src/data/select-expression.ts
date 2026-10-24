@@ -7,6 +7,7 @@ export interface SelectExpressionContext {
   counted: boolean
   inCondition: boolean
   aggregate?: string
+  enclosingAggregate?: string
 }
 
 export interface SelectExpressionFieldContext extends SelectExpressionContext {
@@ -73,7 +74,7 @@ export function visitSelectExpression (
   const visitSelect = (statement: Record<string, unknown>, context: SelectExpressionContext): void => {
     const aggregate = typeof statement.aggregate === 'string' ? statement.aggregate : context.aggregate
     const counted = context.counted || aggregate === 'count'
-    const selectContext = { ...context, aggregate, counted }
+    const selectContext = { ...context, aggregate, counted, enclosingAggregate: context.aggregate }
     visitor.select?.(statement, selectContext)
 
     if (typeof statement.field === 'string') {

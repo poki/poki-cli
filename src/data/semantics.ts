@@ -1,4 +1,4 @@
-import { CliError } from '../errors'
+import { CliError, inputError } from '../errors'
 import { isRecord } from '../json'
 import { findTable, tableCatalog, type ColumnDefinition, type DataAggregate, type TableDefinition } from './catalog'
 import { recipeNamesForTable } from './examples'
@@ -496,6 +496,133 @@ function semanticViolations (query: Record<string, unknown>, from: TableDefiniti
   return violations
 }
 
+// Infer only types represented by the bundled schema or the expression itself.
+// Unknown types stay backend-authoritative rather than rejecting valid queries.
+type ExpressionType = 'string' | 'number' | 'boolean' | 'date' | 'array' | 'unknown'
+
+function expressionType (value: unknown, from: TableDefinition): ExpressionType {
+  if (!isRecord(value)) return 'unknown'
+  if (value.aggregate === 'count' || value.aggregate === 'sum' || value.aggregate === 'avg' || value.aggregate === 'quantileTDigest') return 'number'
+  if (value.aggregate === 'groupUniqArray') return 'array'
+  if (value.constant !== undefined) return typeof value.constant as ExpressionType
+  if (typeof value.field === 'string') {
+    const type = resolveKnownField(from, value.field)?.column.type.replace(/^Nullable\((.*)\)$/, '$1') ?? ''
+    if (type === 'String' || type.startsWith('FixedString(')) return 'string'
+    if (/^(U?Int|Float|Decimal)/.test(type)) return 'number'
+    if (type.startsWith('Date')) return 'date'
+    if (type.startsWith('Array(')) return 'array'
+    if (type === 'Bool') return 'boolean'
+  }
+  const commonType = (values: unknown[]): ExpressionType => {
+    const types = values.map(value => expressionType(value, from))
+    return types.length > 0 && types.every(type => type === types[0]) ? types[0] : 'unknown'
+  }
+  if (isRecord(value.formula)) {
+    return value.formula.operator === 'coalesce' && Array.isArray(value.formula.terms)
+      ? commonType(value.formula.terms)
+      : 'number'
+  }
+  if (isRecord(value.function)) {
+    if (['lower', 'upper', 'concat', 'toString'].includes(String(value.function.name))) return 'string'
+    if (['number', 'length'].includes(String(value.function.name))) return 'number'
+    if (value.function.name === 'toDate') return 'date'
+    if (value.function.name === 'if' && Array.isArray(value.function.args)) return commonType(value.function.args.slice(1))
+  }
+  return 'unknown'
+}
+
+function validateExpressionTypes (query: Record<string, unknown>, from: TableDefinition): void {
+  const outputs = new Map((Array.isArray(query.select) ? query.select.filter(isRecord) : []).map(statement => [resolvedSelectOutputName(statement), statement]))
+  const visitor = {
+    condition: (expression: unknown[], context: { path: string }) => {
+      const [left, operator] = expression
+      if (typeof left !== 'string' || typeof operator !== 'string' || !['has', 'has_any_int64', 'has_any_uint64', 'has_any_float64', 'has_any_string'].includes(operator.trim().toLowerCase())) return
+      const type = expressionType(outputs.get(left) ?? { field: left }, from)
+      if (type !== 'array' && type !== 'unknown') throw inputError(`${context.path}[0]: ${operator} requires an array column; ${left} produces ${type}.`)
+    },
+    select: (statement: Record<string, unknown>, context: { path: string }) => {
+      const fn = statement.function
+      if (!isRecord(fn) || !Array.isArray(fn.args)) return
+      fn.args.forEach((arg, index) => {
+        let allowed: ExpressionType[] | undefined
+        if (['lower', 'upper'].includes(String(fn.name))) allowed = ['string']
+        if (fn.name === 'length') allowed = ['string', 'array']
+        if (['toString', 'toDate'].includes(String(fn.name)) && index === 1) allowed = ['string']
+        const type = expressionType(arg, from)
+        if (allowed !== undefined && type !== 'unknown' && !allowed.includes(type)) {
+          throw inputError(`${context.path}.function.args[${index}] must produce ${allowed.join(' or ')} for ${String(fn.name)}; received ${type}.`)
+        }
+      })
+    }
+  }
+  if (Array.isArray(query.select)) query.select.forEach((statement, index) => visitSelectExpression(statement, visitor, { path: `select[${index}]` }))
+  if (query.where !== undefined) visitSelectExpression(query.where, visitor, { root: 'condition', path: 'where' })
+}
+
+function validateGrouping (query: Record<string, unknown>, from: TableDefinition): void {
+  const selects = Array.isArray(query.select) ? query.select.filter(isRecord) : []
+  const groups = Array.isArray(query.group) ? query.group.filter((field): field is string => typeof field === 'string') : []
+  const hasAggregate = (value: unknown): boolean => {
+    let found = false
+    visitSelectExpression(value, { select: statement => { if (typeof statement.aggregate === 'string') found = true } })
+    return found
+  }
+  if (groups.length === 0 && !selects.some(hasAggregate)) return
+
+  const outputs = new Map(selects.map(statement => [resolvedSelectOutputName(statement), statement]))
+  const fieldKey = (field: string): string => field.includes('.') ? field : `${from.name}.${field}`
+  // Aliases do not change expression identity. Normalize source qualification
+  // too, so grouping by a computed alias also permits that expression nested
+  // inside another selected formula or function.
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical)
+    if (!isRecord(value)) return value
+    return Object.fromEntries(Object.keys(value).filter(key => key !== 'alias').sort().map(key => [key,
+      key === 'field' && typeof value[key] === 'string' ? fieldKey(value[key]) : canonical(value[key])
+    ]))
+  }
+  const expressionKey = (value: unknown): string => JSON.stringify(canonical(value))
+  const grouped = new Set<string>()
+  for (const group of groups) {
+    const expression = outputs.get(group) ?? { field: group }
+    if (hasAggregate(expression)) throw inputError(`group cannot contain aggregate output "${group}".`)
+    grouped.add(expressionKey(expression))
+  }
+  const checkField = (field: string, path: string): void => {
+    if (!grouped.has(expressionKey({ field }))) throw inputError(`${path}: ${field} must be grouped or aggregated.`)
+  }
+  const checkCondition = (value: unknown, path: string): void => {
+    if (Array.isArray(value)) {
+      if (typeof value[0] === 'string') checkField(value[0], `${path}[0]`)
+      else check(value[0], `${path}[0]`)
+      check(value[2], `${path}[2]`)
+    } else if (isRecord(value) && Array.isArray(value.expressions)) {
+      value.expressions.forEach((expression, index) => checkCondition(expression, `${path}.expressions[${index}]`))
+    }
+  }
+  const check = (value: unknown, path: string): void => {
+    if (!isRecord(value) || typeof value.aggregate === 'string' || grouped.has(expressionKey(value))) return
+    if (typeof value.field === 'string') checkField(value.field, `${path}.field`)
+    if (isRecord(value.formula) && Array.isArray(value.formula.terms)) {
+      value.formula.terms.forEach((term, index) => check(term, `${path}.formula.terms[${index}]`))
+    }
+    if (isRecord(value.function) && Array.isArray(value.function.args)) {
+      const fn = value.function
+      value.function.args.forEach((arg, index) => {
+        const argPath = `${path}.function.args[${index}]`
+        if (fn.name === 'if' && index === 0) checkCondition(arg, argPath)
+        else check(arg, argPath)
+      })
+    }
+  }
+  selects.forEach((statement, index) => check(statement, `select[${index}]`))
+  if (Array.isArray(query.order)) {
+    query.order.forEach((order, index) => {
+      if (isRecord(order) && typeof order.field === 'string') check(outputs.get(order.field) ?? { field: order.field }, `order[${index}]`)
+    })
+  }
+}
+
 export function validateDataQuerySemantics (query: Record<string, unknown>): void {
   const references = referenceViolations(query)
   if (references.violations.length > 0) {
@@ -505,6 +632,7 @@ export function validateDataQuerySemantics (query: Record<string, unknown>): voi
     })
   }
   if (references.from === undefined) return
+  validateExpressionTypes(query, references.from)
 
   const violations = semanticViolations(query, references.from)
   if (violations.length > 0) {
@@ -513,4 +641,5 @@ export function validateDataQuerySemantics (query: Record<string, unknown>): voi
       hint: 'Preserve or exactly filter every required dimension. If a contract says the unique rollup is unavailable, use a source at the entity grain instead of summing these rows.'
     })
   }
+  validateGrouping(query, references.from)
 }

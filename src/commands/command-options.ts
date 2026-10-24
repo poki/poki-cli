@@ -224,8 +224,8 @@ const repeatedStringValue: Options = { string: true, nargs: 1 }
 
 export function withListOptions (yargs: Argv, capabilities: ListCapabilities, kind: ResourceListKind): Argv {
   let command = withListViewOptions(yargs, kind)
-  if (capabilities.filter) command = applySpecOption(command, filterOption, repeatedStringValue)
-  if (capabilities.sort) command = applySpecOption(command, sortOption, repeatedStringValue)
+  if (capabilities.filter) command = applySpecOption(command, { ...filterOption, description: filterOption.description + ` Supported fields: ${capabilities.filterFields?.join(', ') ?? 'endpoint-specific'}.` }, repeatedStringValue)
+  if (capabilities.sort) command = applySpecOption(command, { ...sortOption, description: sortOption.description + ` Supported fields: ${capabilities.sortFields?.join(', ') ?? 'endpoint-specific'}.` }, repeatedStringValue)
   if (capabilities.pagination) {
     // Every documented pagination bound is a count except the boolean --all,
     // whose kind the spec already carries.

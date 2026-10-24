@@ -95,6 +95,8 @@ void test('out-of-bounds numeric options fail locally and name the offending fla
     { args: ['versions', 'get', 'VER', '--wait', '--wait-timeout-ms', '0'], flag: '--wait-timeout-ms' },
     { args: ['versions', 'get', 'VER', '--wait', '--wait-timeout-ms', '2147483648'], flag: '--wait-timeout-ms' },
     { args: ['data', 'run', 'game-users', '--limit', '0'], flag: '--limit' },
+    { args: ['data', 'run', 'game-users', '--limit', '1e30'], flag: '--limit' },
+    { args: ['data', 'run', 'game-users', '--offset', '1e30'], flag: '--offset' },
     { args: ['data', 'run', 'game-users', '--offset', '-1'], flag: '--offset' }
   ]
   await Promise.all(cases.map(async ({ args, flag }) => {
@@ -128,4 +130,40 @@ void test('conflicting flag combinations fail before any request', async t => {
   const allPageError = jsonError(allPage.stderr)
   assert.equal(allPageError.code, 'INVALID_INPUT')
   assert.match(allPageError.message, /cannot be combined with --page/)
+})
+
+void test('unsupported list fields and filter values fail before requests', async t => {
+  const env = offlineAuth(t)
+  for (const args of [
+    ['versions', 'list', '--game', 'g', '--filter', 'activated_at=null'],
+    ['versions', 'list', '--game', 'g', '--filter', 'label=full_like:example'],
+    ['versions', 'list', '--game', 'g', '--sort', 'activated_at'],
+    ['netlib-lobbies', 'list', '--game', 'g', '--filter', 'id=g-code'],
+    ['netlib-lobbies', 'list', '--game', 'g', '--sort', 'id'],
+    ['versions', 'list', '--game', 'g', '--filter', 'label=release:beta']
+  ]) {
+    const result = await runCli([...args, '--format', 'json'], { env })
+    assert.equal(result.code, 2, result.stderr)
+    assert.equal(jsonError(result.stderr).code, 'INVALID_INPUT')
+  }
+})
+
+void test('invalid analytics grouping, function arguments, and integer ranges fail offline', async t => {
+  const env = offlineAuth(t)
+  const queries = [
+    { select: [{ field: 'date' }, { aggregate: 'count', alias: 'n' }] },
+    { select: [{ alias: 'bad', function: { name: 'number', args: [{ constant: '1' }, { constant: '2' }, { constant: '3' }] } }] },
+    { select: [{ alias: 'bad', function: { name: 'lower', args: [{ field: 'gameplays' }] } }] },
+    { select: [{ field: 'date' }], limit: 1e30 },
+    { select: [{ field: 'date' }], offset: 1e30 },
+    { select: [{ aggregate: 'sum', alias: 'n', function: { name: 'number', args: [{ aggregate: 'count' }] } }] },
+    { select: [{ field: 'date' }], where: { expressions: [[{ aggregate: 'count', alias: 'n' }, '>', 0]] } },
+    { select: [{ field: 'date' }], where: { expressions: [['country_id', 'has', 'US']] } },
+    { select: [{ aggregate: 'count', alias: 'metrics.total' }] }
+  ]
+  for (const query of queries) {
+    const result = await runCli(['data', 'query', '--query', JSON.stringify({ from: 'dbt_p4d_gameplays', ...query }), '--format', 'json'], { env })
+    assert.equal(result.code, 2, result.stderr)
+    assert.equal(jsonError(result.stderr).code, 'INVALID_INPUT')
+  }
 })

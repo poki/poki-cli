@@ -3,7 +3,7 @@ import type { Argv } from 'yargs'
 import { ApiClient } from '../api'
 import { gamesDocumentation } from '../docs/resources'
 import { CliError, inputError } from '../errors'
-import { characterCount, requireChanges } from '../input'
+import { requireChanges } from '../input'
 import { jsonApiDocument, unreadableFields, unreadableFieldsReport } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
 import { getProjectGameId, projectConfigError } from '../project'
@@ -50,8 +50,8 @@ function validateAnnotations (value: unknown): void {
       allowed_annotations: ['engine']
     }, 'Use the dedicated game workflow for metadata that is not developer-editable.')
   }
-  if (typeof annotations.engine !== 'string' || !/^[a-z0-9-]{2,32}$/.test(annotations.engine)) {
-    throw inputError('annotations.engine must contain 2 through 32 lowercase letters, digits, or hyphens.')
+  if (typeof annotations.engine !== 'string') {
+    throw inputError('annotations.engine must be a string.')
   }
 }
 
@@ -61,11 +61,10 @@ function validateGameMutationData (data: Record<string, unknown>): void {
   }
   for (const field of ['suggested_description', 'suggested_categories'] as const) {
     if (data[field] !== undefined && typeof data[field] !== 'string') throw inputError(`${field} must be a string.`)
+    if (typeof data[field] === 'string' && Buffer.byteLength(data[field], 'utf8') > 65535) throw inputError(`${field} must contain at most 65535 UTF-8 bytes.`)
   }
   if (data.privacy_policy_url !== undefined) {
     if (typeof data.privacy_policy_url !== 'string') throw inputError('privacy_policy_url must be a string.')
-    if (characterCount(data.privacy_policy_url) > 255) throw inputError('privacy_policy_url must contain at most 255 characters.')
-    if (data.privacy_policy_url !== '' && !URL.canParse(data.privacy_policy_url)) throw inputError('privacy_policy_url must be an absolute URL.')
   }
 }
 
@@ -135,15 +134,15 @@ function withGameFieldOptions (yargs: Argv): Argv {
       type: 'string'
     })
     .option('privacy-policy-url', {
-      describe: 'Public privacy-policy URL',
+      describe: 'Public privacy-policy URL with a supported network scheme and no whitespace',
       type: 'string'
     })
     .option('suggested-description', {
-      describe: 'Developer-suggested public game description',
+      describe: 'Developer-suggested public game description, at most 65535 UTF-8 bytes',
       type: 'string'
     })
     .option('suggested-category', {
-      describe: 'Suggested Poki content-category name; repeat for multiple names (use audiences list to discover names)',
+      describe: 'Suggested Poki content-category name; combined comma-separated value at most 65535 UTF-8 bytes; repeat for multiple names (use audiences list to discover names)',
       type: 'array',
       string: true
     })

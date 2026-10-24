@@ -3,6 +3,11 @@
 // but normalized CLI output and help intentionally omit permissions that do
 // not belong to a supported developer workflow.
 export const developerPermissionCatalog = [
+  { code: 'can_read_owned_ab_tests', description: 'Read game version A/B tests for owned games.' },
+  { code: 'can_edit_owned_ab_tests', description: 'Manage game version A/B tests for owned games.' },
+  { code: 'can_read_owned_game_thumbnail_ab_tests', description: 'Read thumbnail A/B tests for owned games.' },
+  { code: 'can_edit_owned_game_thumbnail_ab_tests', description: 'Manage thumbnail A/B tests for owned games.' },
+  { code: 'can_request_web_fit_test', description: 'Request a Web Fit test for an owned game.' },
   { code: 'can_activate_approved_versions', description: 'Activate a completed version with an approved review when direct traffic-track editing is unavailable.' },
   { code: 'can_create_owned_game_change_requests', description: 'Request supported title, thumbnail, or content-security-policy changes for a game belonging to the current user or team.' },
   { code: 'can_create_owned_player_feedback_question', description: 'Queue a generated player-feedback question for a game belonging to the current user or team.' },

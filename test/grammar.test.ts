@@ -222,8 +222,6 @@ const negativeCases: NegativeCase[] = [
     message: 'Query limit must be a positive integer'
   },
   {
-    // The validator sets no upper limit bound; non-integers are the other
-    // rejected shape besides values below 1.
     name: 'fractional limit',
     query: baseQuery({ limit: 2.5 }),
     message: 'Query limit must be a positive integer'
@@ -281,6 +279,19 @@ for (const entry of negativeCases) {
     })
   })
 }
+
+void test('validateDataQuery requires one argument for unary functions', () => {
+  for (const name of ['lower', 'upper', 'length']) {
+    for (const count of [0, 1, 2]) {
+      const query = baseQuery({ select: [{ alias: 'value', function: { name, args: Array.from({ length: count }, () => ({ constant: 'A' })) } }] })
+      if (count === 1) {
+        assert.doesNotThrow(() => validateDataQuery(query))
+      } else {
+        assert.throws(() => validateDataQuery(query), { message: `select[0].function.args must contain exactly one argument for ${name}.` })
+      }
+    }
+  }
+})
 
 void test('validateDataQuery rejects null for every comparison operator', () => {
   for (const operator of comparisonOperators) {
@@ -669,4 +680,39 @@ void test('count aliases follow the backend context rules for computed and condi
   assert.throws(() => validateDataQuery(baseQuery({
     where: { expressions: [['gameplays', '<', { aggregate: 'count' }]] }
   })), /where\.expressions\[0\]\[2\]\.alias is required for count/)
+})
+
+void test('conversion functions reject excess arguments and retain optional timezones', () => {
+  const query = (name: string, args: unknown[]): Record<string, unknown> => baseQuery({ select: [{ alias: 'result', function: { name, args } }] })
+  for (const name of ['number', 'toDate', 'toString']) {
+    assert.throws(() => validateDataQuery(query(name, [{ constant: '1' }, { constant: '2' }, { constant: '3' }])), /args must contain/)
+    assert.doesNotThrow(() => validateDataQuery(query(name, [{ constant: '1' }])))
+  }
+  assert.throws(() => validateDataQuery(query('number', [{ constant: '1' }, { constant: '2' }])), /exactly one argument/)
+  for (const name of ['toDate', 'toString']) assert.doesNotThrow(() => validateDataQuery(query(name, [{ field: 'date' }, { constant: 'UTC' }])))
+})
+
+void test('query pagination stays within exact JavaScript integers', () => {
+  for (const field of ['limit', 'offset']) {
+    for (const value of [Number.MAX_SAFE_INTEGER + 1, 1e30]) assert.throws(() => validateDataQuery(baseQuery({ [field]: value })), /9007199254740991/)
+    assert.doesNotThrow(() => validateDataQuery(baseQuery({ [field]: Number.MAX_SAFE_INTEGER })))
+  }
+})
+
+void test('aggregate placement rejects nested aggregates and WHERE aggregates, including aliases', () => {
+  const count = { aggregate: 'count', alias: 'n' }
+  const nested = { aggregate: 'sum', alias: 'total', function: { name: 'number', args: [count] } }
+  assert.throws(() => validateDataQuery(baseQuery({ select: [nested] })), /aggregates cannot be nested/)
+  assert.throws(() => validateDataQuery(baseQuery({ select: [{ ...count, condition: { expressions: [[count, '>', 0]] } }] })), /aggregates cannot be nested/)
+  assert.throws(() => validateDataQuery(baseQuery({ where: { expressions: [[count, '>', 0]] } })), /aggregates cannot be used in where/)
+  assert.throws(() => validateDataQuery(baseQuery({ where: { expressions: [['gameplays', '>', { function: { name: 'number', args: [count] } }]] } })), /aggregates cannot be used in where/)
+  assert.throws(() => validateDataQuery(baseQuery({ select: [count], where: { expressions: [{ operator: 'or', expressions: [['n', '>', 0]] }] } })), /aggregate output n cannot be used in where/)
+  assert.doesNotThrow(() => validateDataQuery(baseQuery({ select: [{ alias: 'n', function: { name: 'number', args: [count] } }] })))
+  assert.doesNotThrow(() => validateDataQuery(baseQuery({ select: [{ alias: 'n', formula: { operator: '+', terms: [count, { aggregate: 'count' }] } }] })))
+  assert.doesNotThrow(() => validateDataQuery(baseQuery({ select: [{ ...count, condition: { expressions: [['country_id', '==', 'US']] } }] })))
+})
+
+void test('aliases are unqualified while source fields may remain qualified', () => {
+  assert.throws(() => validateDataQuery(baseQuery({ select: [{ aggregate: 'count', alias: 'metrics.total' }] })), /alias must be an unqualified output name/)
+  assert.doesNotThrow(() => validateDataQuery(baseQuery({ select: [{ field: 'dbt_p4d_gameplays.date', alias: 'day' }] })))
 })

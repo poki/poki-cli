@@ -7,9 +7,9 @@ export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDis
     option('--archived', 'boolean', 'Archive the game; --no-archived restores it. Archiving is blocked during a requested or running Web Fit test.'),
     option('--favorite', 'boolean', 'Favorite for the current user only; --no-favorite removes it.'),
     option('--engine', 'string', 'Developer-editable engine annotation: 2-32 lowercase letters, digits, or hyphens; the server preserves every other annotation.'),
-    option('--privacy-policy-url', 'string', 'Public privacy-policy URL.'),
-    option('--suggested-description', 'string', 'Developer-suggested public game description.'),
-    option('--suggested-category', 'string', `Suggested Poki content-category name; repeatable. ${categoryNameDiscovery}`, { repeatable: true })
+    option('--privacy-policy-url', 'string', 'Public privacy-policy URL with a supported network scheme and no whitespace.'),
+    option('--suggested-description', 'string', 'Developer-suggested public game description, at most 65535 UTF-8 bytes.'),
+    option('--suggested-category', 'string', `Suggested Poki content-category name; combined comma-separated value at most 65535 UTF-8 bytes; repeatable. ${categoryNameDiscovery}`, { repeatable: true })
   ]
   const gameDataShapeBehavior = '--data is a flat attribute object, not a JSON:API envelope, and replaces all field flags. Run poki games fields for the editable field reference.'
   apiAction(['games', 'list'], 'List games for one team with bounded pagination.', { method: 'GET', path: '/games', contacts_api: true }, ['can_read_owned_games'], { options: [option('--team', 'string', 'Select an exact team ID; without it the API uses the authenticated user\'s first team.'), ...listOptionsFor(listCapabilities.games)], scope: '--team or the authenticated user\'s first team', behavior: ['This endpoint supports --team, sorting, and pagination. It does not support the generic --filter option or combine all of a user\'s teams.'], examples: [example('poki games list --team TEAM_ID --page 2 --page-size 50', 'Read one bounded page; meta.has_next reports whether more pages exist.'), example('poki games list --all --fields id,title,public_version --format csv', 'Select three developer-visible fields and export the complete list as CSV; a single page is refused unless it proves it is the last one.')] })

@@ -40,7 +40,10 @@ void test('resource documentation keeps structural invariants for every document
       assert.equal(resourceFieldDetails(documentation, field.name)?.time_zone, RESOURCE_API_TIME_ZONE, `${documentation.command}.${field.name}`)
       assert.equal(resourceFieldDetails(documentation, field.name)?.encoding, 'unix_seconds', `${documentation.command}.${field.name}`)
     }
-    assert.ok(documentation.references.length > 0, documentation.command)
+    // A/B operations have bundled field documentation but no external SDK guide.
+    if (!['game-ab-tests', 'thumbnail-ab-tests'].includes(documentation.command)) {
+      assert.ok(documentation.references.length > 0, documentation.command)
+    }
     assert.ok(documentation.references.every(reference => reference.url.startsWith('https://sdk.poki.com/') || (documentation.command === 'media-kit' && reference.url === 'https://poki.notion.site/Media-Kit-Assets-copy-3b51670376c380e1982dea81a6097f9d')), documentation.command)
   }
 })
@@ -199,12 +202,12 @@ void test('server-sourced lifecycle enums stay pinned', () => {
   }
 })
 
-void test('Player Fit discovery describes neutral fields and version-specific populations', () => {
-  for (const name of ['target_count', 'mobile_collected', 'desktop_collected', 'tablet_collected', 'in_progress_count', 'average_in_progress_time_seconds', 'pageviews', 'gameplays', 'started']) {
+void test('Player Fit discovery describes the current API fields', () => {
+  for (const name of ['device_category', 'target_gameplays', 'pageviews', 'gameplays', 'started']) {
     assert.notEqual(resourceFieldDetails(playerFitTestsDocumentation, name), undefined, name)
   }
-  for (const name of ['target_gameplays', 'mobile_started', 'desktop_started', 'tablet_started', 'gameplays_in_progress', 'average_in_progress_gameplay_time_seconds', 'new_engagement', 'new_started']) {
+  for (const name of ['device_categories', 'test_version', 'target_count', 'mobile_collected', 'desktop_collected', 'tablet_collected', 'in_progress_count', 'average_in_progress_time_seconds']) {
     assert.equal(resourceFieldDetails(playerFitTestsDocumentation, name), undefined, name)
   }
-  assert.match(JSON.stringify(resourceFieldDetails(playerFitTestsDocumentation, 'engagement')), /all admitted pageviews/)
+  assert.match(JSON.stringify(resourceFieldDetails(playerFitTestsDocumentation, 'engagement')), /positive-duration sessions/)
 })

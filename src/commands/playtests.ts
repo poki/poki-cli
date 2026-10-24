@@ -3,7 +3,7 @@ import type { Argv } from 'yargs'
 import { ApiClient } from '../api'
 import { playtestsDocumentation } from '../docs/resources'
 import { inputError } from '../errors'
-import { readStructuredSource, requireAllowedFields, requireChanges } from '../input'
+import { characterCount, readStructuredSource, requireAllowedFields, requireChanges } from '../input'
 import { isRecord } from '../json'
 import { jsonApiDocument } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
@@ -98,7 +98,7 @@ export function withPlaytestRequestOptions (
     .option('recordings', { describe: 'Number of recordings to request (1-10, default 10)', type: 'number' })
     .option('device-category', { describe: 'Device audience', choices: ['any', ...playerFitDeviceCategories] })
     .option('orientation', { describe: 'Required screen orientation', choices: audienceOrientations })
-    .option('category', { describe: 'Numeric audience category ID; repeat for multiple categories', type: 'array', string: true })
+    .option('category', { describe: 'Numeric audience category ID; combined list at most 512 characters including commas; repeat for multiple categories', type: 'array', string: true })
     .option('new-users-only', { describe: 'Only recruit new users', type: 'boolean' })
     .option('normal-tile', { describe: 'Recruit through the normal game tile; requires a game thumbnail', type: 'boolean' })
 }
@@ -199,7 +199,7 @@ export function registerPlaytestCommands (yargs: Argv, api: ApiClient): Argv {
     })
     .command('update <recording-id>', 'Replace the editable tag list on a recording', update => withGameMutationOptions(withDataOption(update, 'JSON or TOON object containing only tags, inline, from @file, or stdin'), projectGameId, 'Game that owns the recording')
       .positional('recording-id', { describe: 'Playtest recording ID', type: 'string', demandOption: true })
-      .option('tag', { describe: 'Tag name; repeat to set multiple tags', type: 'array', string: true })
+      .option('tag', { describe: 'Tag name, at most 255 characters after trimming; repeat to set multiple tags', type: 'array', string: true })
       .option('clear-tags', { describe: 'Replace the tag list with an empty list', type: 'boolean', default: false }), async argv => {
       ensureDataExclusive(argv, ['tag'])
       if (argv.clearTags && (argv.data !== undefined || argv.tag !== undefined)) {
@@ -225,6 +225,9 @@ export function registerPlaytestCommands (yargs: Argv, api: ApiClient): Argv {
       requireChanges(data)
       if (!Array.isArray(data.tags) || data.tags.some(tag => typeof tag !== 'string' || tag.trim() === '')) {
         throw inputError('tags must be an array of non-empty strings.')
+      }
+      if (data.tags.some(tag => characterCount(String(tag).trim()) > 255)) {
+        throw inputError('tags must contain at most 255 characters each after trimming whitespace.')
       }
       const id = String(argv.recordingId)
       const body = jsonApiDocument('playtest_recordings', data, id)

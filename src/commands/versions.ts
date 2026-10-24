@@ -7,7 +7,7 @@ import { ApiClient } from '../api'
 import { sanitizeDeveloperResourceAttribute } from '../developer-surface'
 import { versionsDocumentation } from '../docs/resources'
 import { CliError, inputError, registerInterruptCleanup, safeErrorCause } from '../errors'
-import { characterCount, containsZeroWidthCharacter, requireChanges } from '../input'
+import { characterCount, requireChanges } from '../input'
 import { jsonApiDocument, jsonValueKind, normalizeJsonApiResource, normalizeJsonApiResourceForRecovery, ResourceResult } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
 import { isRecord } from '../json'
@@ -136,18 +136,23 @@ function validateVersionText (data: Record<string, unknown>): void {
     const value = data[field]
     if (value === undefined) continue
     if (typeof value !== 'string') throw inputError(`${field} must be a string.`)
-    if (field !== 'filename' && containsZeroWidthCharacter(value)) throw inputError(`${field} must not contain zero-width characters.`)
   }
-  if (typeof data.label === 'string' && characterCount(data.label) > 256) {
-    throw inputError('label must contain at most 256 characters.')
+  if (typeof data.filename === 'string' && characterCount(data.filename) > 128) {
+    throw inputError('filename must contain at most 128 characters.')
+  }
+  if (typeof data.notes === 'string' && Buffer.byteLength(data.notes, 'utf8') > 65535) {
+    throw inputError('notes must contain at most 65535 UTF-8 bytes.')
+  }
+  if (typeof data.label === 'string' && Buffer.byteLength(data.label, 'utf8') > 256) {
+    throw inputError('label must contain at most 256 UTF-8 bytes.')
   }
 }
 
 function withVersionUpdateOptions (yargs: Argv, projectGameId: string | undefined): Argv {
   return withGameMutationOptions(withDataOption(yargs, 'JSON or TOON object, @file, or - for stdin; mutually exclusive with filename, label, and notes'), projectGameId, 'Parent Poki for Developers game ID')
-    .option('filename', { describe: 'Uploaded archive filename shown by the API', type: 'string' })
-    .option('label', { describe: 'Human-readable version label', type: 'string' })
-    .option('notes', { describe: 'Version description or release notes', type: 'string' })
+    .option('filename', { describe: 'Uploaded archive filename, at most 128 characters', type: 'string' })
+    .option('label', { describe: 'Human-readable version label, at most 256 UTF-8 bytes', type: 'string' })
+    .option('notes', { describe: 'Version description or release notes, at most 65535 UTF-8 bytes', type: 'string' })
 }
 
 function mutationOutcomeIsUncertain (error: unknown): boolean {
@@ -356,8 +361,8 @@ export function registerVersionCommands (yargs: Argv, api: ApiClient): Argv {
         default: project.build_dir ?? 'dist',
         type: 'string'
       })
-      .option('label', { describe: 'Human-readable version label', type: 'string' })
-      .option('notes', { describe: 'Version notes', type: 'string' })
+      .option('label', { describe: 'Human-readable version label, at most 256 UTF-8 bytes', type: 'string' })
+      .option('notes', { describe: 'Version notes, at most 65535 UTF-8 bytes', type: 'string' })
       .option('disable-image-compression', { describe: 'Disable image compression for this version', type: 'boolean', default: false })
       .option('disable-transforms', { describe: 'Disable upload transforms for this version', type: 'boolean', default: false }), async argv => {
       const requestedBuildDir = String(argv.buildDir)
@@ -369,6 +374,9 @@ export function registerVersionCommands (yargs: Argv, api: ApiClient): Argv {
       if (!statSync(buildDir).isDirectory()) throw inputError(`Build directory '${buildDir}' is not a directory.`, { build_dir: buildDir })
       if (readdirSync(buildDir).length === 0) throw inputError(`Build directory '${buildDir}' is empty.`, { build_dir: buildDir })
       validateVersionText({ label: argv.label, notes: argv.notes })
+      if (typeof argv.label === 'string' && Buffer.byteLength(argv.label, 'utf8') > 256) {
+        throw inputError('Upload label must contain at most 256 UTF-8 bytes.')
+      }
       const path = gamePath(argv.game, 'versions')
       const previewBody = {
         multipart: true,
@@ -451,7 +459,7 @@ export function registerVersionCommands (yargs: Argv, api: ApiClient): Argv {
         throw new CliError('ACTIVE_VERSION_MULTIPLE_TRACKS', 'The active version cannot be changed while multiple tracks exist.', 4, {
           status: 409,
           details: { game_id: gameID, track_count: previousTracks.length, tracks: previousTracks },
-          hint: 'Resolve the game\'s traffic experiment or track allocation before activating a version.'
+          hint: 'Use game-ab-tests list and game-ab-tests stop TEST_ID --yes to resolve an active experiment before activating a version.'
         })
       }
       const body = jsonApiDocument('games', { tracks: [publicTrack] }, gameID)

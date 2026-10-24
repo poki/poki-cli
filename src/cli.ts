@@ -1,3 +1,5 @@
+import { registerABTestCommands } from './commands/ab-tests'
+import { registerWebFitTestCommands } from './commands/web-fit-tests'
 import { registerMediaKitCommands } from './commands/media-kit'
 import yargs, { Argv } from 'yargs'
 
@@ -289,6 +291,8 @@ export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
   cli = registerAudienceCommands(cli)
   cli = registerDiscoveryCommands(cli, api)
   cli = registerLimitCommands(cli, api)
+  cli = registerABTestCommands(cli, api)
+  cli = registerWebFitTestCommands(cli, api)
   cli = registerMediaKitCommands(cli, api)
   cli = registerGameCommands(cli, api)
   cli = registerVersionCommands(cli, api)

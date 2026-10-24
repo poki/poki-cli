@@ -231,7 +231,7 @@ void test('whoami returns normalized user data and sends the stored bearer token
   assert.deepEqual(parsed.data, { type: 'users', id: 'u1', name: 'Erik', team_id: 'team-1' })
   assert.equal(parsed.meta.total, 1)
   assert.deepEqual(parsed.meta.failed, [])
-  assert.deepEqual(parsed.meta.permissions, ['can_read_self', 'can_read_owned_games'])
+  assert.deepEqual(parsed.meta.permissions, ['can_read_self', 'can_read_owned_games', 'can_read_owned_ab_tests', 'can_request_web_fit_test'])
   assert.deepEqual(Object.keys(parsed.meta).sort(), ['failed', 'permissions', 'total'])
 
   const raw = await runCli(['whoami', '--raw', '--format', 'json'], { env })

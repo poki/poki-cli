@@ -583,6 +583,23 @@ void test('versions upload --dry-run performs zero requests', async t => {
   assert.equal(preview.dry_run, true)
   assert.equal(preview.request.method, 'POST')
   assert.equal(preview.request.path, '/games/g/versions')
+  for (const label of ['a'.repeat(256), '😀'.repeat(64)]) {
+    const accepted = await runCli([
+      'versions', 'upload', '--game', 'g', '--build-dir', build, '--label', label, '--dry-run', '--format', 'json'
+    ], { env })
+    assert.equal(accepted.code, 0, accepted.stderr)
+  }
+  for (const mode of [[], ['--dry-run']]) {
+    const rejected = await runCli([
+      'versions', 'upload', '--game', 'g', '--build-dir', build, '--label', '😀'.repeat(65), ...mode, '--format', 'json'
+    ], { env })
+    assert.equal(rejected.code, 2, rejected.stderr)
+    assert.match(JSON.parse(rejected.stderr).error.message, /256 UTF-8 bytes/)
+  }
+  const update = await runCli([
+    'versions', 'update', 'v', '--game', 'g', '--label', '😀'.repeat(64), '--dry-run', '--format', 'json'
+  ], { env })
+  assert.equal(update.code, 0, update.stderr)
   assert.equal(requests, 0)
 })
 

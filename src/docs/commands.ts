@@ -1,3 +1,4 @@
+import { addABTestCommandSpecs, addWebFitTestCommandSpecs } from './command-groups/ab-tests'
 import { addMediaKitCommandSpecs } from './command-groups/media-kit'
 import { resourceDocumentations } from './resources'
 import { ANALYTICS_TIME_ZONE, RESOURCE_API_TIME_ZONE } from '../timezones'
@@ -143,7 +144,7 @@ const waitOptions = (subject: string): HelpOption[] => [
   option('--wait-timeout-ms', TIMEOUT_MILLISECONDS_RANGE, `Maximum total --wait time before a retryable WAIT_TIMEOUT error; accepts an ${TIMEOUT_MILLISECONDS_RANGE}.`, { default: DEFAULT_WAIT_TIMEOUT_MS })
 ]
 const listViewOptions: HelpOption[] = [fullOption, fieldsOption, listFormatOption, viewRawOption, timeoutOption]
-export const filterOption = option('--filter', 'field=value', 'JSON:API filter; repeatable. Use attribute names from the group fields index. Observed server operators include field=null and field=not:null for nullable timestamps.', { repeatable: true })
+export const filterOption = option('--filter', 'field=value', 'JSON:API filter; repeatable. Use only the supported filter fields listed for this command. Commas separate alternatives. Colons are reserved for operators: not, less, before, greater, after, between, and not_in. full_like is unsupported: these endpoints do not expose fields with full-text indexes. Use field=null or field=not:null for nullable timestamps; literal colon-containing values are not supported by ordinary comparisons.', { repeatable: true })
 export const sortOption = option('--sort', 'string', 'Sort field; prefix with - for descending (for example --sort -created_at); repeatable.', { repeatable: true })
 // Declaration order is public: it is the order help lists the bounds in and the
 // order withListOptions registers them in.
@@ -156,8 +157,8 @@ export const paginationOptions: HelpOption[] = [
 ]
 function listOptionsFor (capabilities: ListCapabilities): HelpOption[] {
   return [
-    ...(capabilities.filter ? [filterOption] : []),
-    ...(capabilities.sort ? [sortOption] : []),
+    ...(capabilities.filter ? [{ ...filterOption, description: filterOption.description + ` Supported fields: ${capabilities.filterFields?.join(', ') ?? 'endpoint-specific'}.` }] : []),
+    ...(capabilities.sort ? [{ ...sortOption, description: sortOption.description + ` Supported fields: ${capabilities.sortFields?.join(', ') ?? 'endpoint-specific'}.` }] : []),
     ...(capabilities.pagination ? paginationOptions : []),
     ...listViewOptions.map(value => capabilities.pagination && value === viewRawOption ? listRawOption : value)
   ]
@@ -254,7 +255,12 @@ function add (spec: CommandSpec): void {
     // back at the group itself.
     examples: spec.examples ?? (spec.path.length === 1 ? undefined : [defaultExample(spec, risk)]),
     provenance: { ...bundledProvenance, ...(spec.provenance ?? {}) },
-    ...spec
+    ...spec,
+    permission_logic: spec.permission_logic ?? (spec.permission_codes === undefined
+      ? undefined
+      : spec.permission_codes.length === 0
+        ? 'No named permission is required; authentication and backend ownership rules still apply.'
+        : `${spec.permission_codes.join(' AND ')} is required for the documented developer workflow.`)
   })
 }
 
@@ -345,11 +351,8 @@ add({
     example('poki help --all', 'Return every command path and compact contract.'),
     example('poki help --search upload', 'Search command summaries, options, and analytics vocabulary.'),
     example('poki help updates', 'Inspect the daily update advisory contract.'),
-    example('poki context', 'Resolve local configuration without network access.'),
-    example('poki whoami', 'Inspect current identity, team ID, and granted permission identifiers.'),
     example('poki games list', 'Discover the game IDs visible to the account.')
   ],
-  examples: [example('poki help --search upload', 'Find relevant commands, then inspect a detailed action contract.')],
   network: { method: 'none', path: 'offline command index', contacts_api: false },
   risk: 'offline',
   output: { default_format: 'toon', json_override: '--format json' }
@@ -370,6 +373,8 @@ apiAction(['whoami'], 'Return the current user, team relationship, and CLI-relev
 
 addAuthCommandSpecs(commandSpecBuilder)
 addLimitCommandSpecs(commandSpecBuilder)
+addABTestCommandSpecs(commandSpecBuilder)
+addWebFitTestCommandSpecs(commandSpecBuilder)
 addAudienceCommandSpecs(commandSpecBuilder)
 
 addGameCommandSpecs(commandSpecBuilder)
@@ -503,7 +508,15 @@ export function helpDocument (path: string[], notice?: HelpNotice): Record<strin
     // An API command with an explicit empty list meaningfully checks no named
     // permission (game-change-requests cancel); one with no list at all
     // (auth login) has no permission or replay semantics to document.
-    ...(contactsApi && spec.permission_codes !== undefined ? { permission_codes: permissions, permission_requirements: permissionRequirements, ...(spec.permission_logic === undefined ? {} : { permission_logic: spec.permission_logic }), retry: retryContract(spec) } : {}),
+    ...(contactsApi && spec.permission_codes !== undefined
+      ? {
+          permission_codes: permissions,
+          permission_requirements: permissionRequirements,
+          permission_logic: spec.permission_logic,
+          permission_guidance: 'Check effective grants with poki whoami (meta.permissions), then apply permission_logic, including conditional and alternative requirements. Do not infer access from role names or command visibility. Owned permissions require the backend to confirm user or team ownership; grants alone do not establish resource eligibility. Broader backend grants may also authorize access; poki whoami --raw preserves them. Offline --dry-run checks CLI input shape and request construction, not backend content rules, normalization, or permissions.',
+          retry: retryContract(spec)
+        }
+      : {}),
     input_schema: inputSchema(spec),
     output_schema: spec.output ?? { default_format: 'toon', formats: ['toon', 'json'] },
     exit_codes: standardExitCodes,
@@ -704,7 +717,7 @@ export function shapesDocument (): Record<string, unknown> {
       csv: '--format csv is a shape-stable export but cannot carry meta.evidence. Execute analytics as JSON or TOON first and verify completeness, then export. Resource list CSV is rejected whenever the result is incomplete or its completeness cannot be proved, whether a bounded --all reports truncated or an ordinary page reports has_next; a page that filled the requested page size counts as unproven, so use --all to export a collection larger than one page. Otherwise its columns are the union of viewed fields with nested values embedded as JSON cells, and an empty collection exports the header its view declares.'
     },
     permissions: {
-      codes: 'permission_codes document the developer-scoped permission relevant to the command; permission_requirements pairs each code with its description. Commands with multiple reads expose their AND/OR expression in permission_logic. Only HTTP 403 together with JSON:API code permission-denied becomes PERMISSION_DENIED; the same backend code on another status keeps a generic HTTP classification.',
+      codes: 'permission_codes document the developer-scoped permission relevant to the command; permission_requirements pairs each code with its description. Every API action with documented permissions exposes its requirement in permission_logic, including conditional and AND/OR requirements; permission_guidance explains how to check effective grants without treating them as proof of access. Only HTTP 403 together with JSON:API code permission-denied becomes PERMISSION_DENIED; the same backend code on another status keeps a generic HTTP classification.',
       empty: 'An empty permission_codes list means the command checks no named permission (ownership rules still apply server-side).',
       discovery: 'poki help permissions describes every CLI code. poki whoami returns the effective subset granted to the current credentials; --raw preserves the unfiltered backend response.',
       enforcement: 'The backend remains authoritative because ownership, team flags, resource state, and developer-support custom grants cannot be proven from a role label or local preflight.'

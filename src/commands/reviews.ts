@@ -3,7 +3,7 @@ import type { Argv } from 'yargs'
 import { ApiClient } from '../api'
 import { reviewsDocumentation } from '../docs/resources'
 import { inputError } from '../errors'
-import { containsZeroWidthCharacter, requireChanges } from '../input'
+import { requireChanges } from '../input'
 import { jsonApiDocument } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
 import { getProjectGameId } from '../project'
@@ -39,8 +39,8 @@ function validateReviewUpdate (data: Record<string, unknown>): void {
   if (Object.hasOwn(data, 'seen_by_developer') && typeof data.seen_by_developer !== 'boolean') {
     throw inputError('seen_by_developer must be a boolean.')
   }
-  if (typeof data.developer_notes === 'string' && containsZeroWidthCharacter(data.developer_notes)) {
-    throw inputError('developer_notes must not contain zero-width characters.')
+  if (typeof data.developer_notes === 'string' && Buffer.byteLength(data.developer_notes, 'utf8') > 65535) {
+    throw inputError('developer_notes must contain at most 65535 UTF-8 bytes.')
   }
 }
 
@@ -63,10 +63,10 @@ export function registerReviewCommands (yargs: Argv, api: ApiClient): Argv {
     })
     .command('request', 'Request a review for a processed version', request => withGameMutationOptions(withDataOption(request, 'JSON or TOON object containing developer_notes'), projectGameId, 'Parent game ID')
       .option('version', { describe: 'Processed version ID to review', type: 'string', demandOption: true })
-      .option('developer-notes', { describe: 'Required notes for the reviewer', type: 'string' }), async argv => {
+      .option('developer-notes', { describe: 'Required notes for the reviewer, at most 65535 UTF-8 bytes', type: 'string' }), async argv => {
       const data = await resolveMutationInput(argv, requestInput, () => ({ developer_notes: argv.developerNotes }))
       if (typeof data.developer_notes !== 'string' || data.developer_notes.trim() === '') throw inputError('developer_notes is required.')
-      if (containsZeroWidthCharacter(data.developer_notes)) throw inputError('developer_notes must not contain zero-width characters.')
+      validateReviewUpdate(data)
       const path = reviewPath(argv.game, argv.version)
       const body = jsonApiDocument('reviews', data)
       await renderMutation(api, argv, { method: 'POST', path, body, expected: { type: 'reviews' }, behavior: { sideEffects: ['Queues QA and notifies game watchers.'] } })
@@ -74,7 +74,7 @@ export function registerReviewCommands (yargs: Argv, api: ApiClient): Argv {
     .command('update <version-id> <review-id>', 'Update developer notes or mark a review response seen', update => withGameMutationOptions(withDataOption(update, 'JSON or TOON object containing developer_notes and/or seen_by_developer'), projectGameId, 'Parent game ID')
       .positional('version-id', { describe: 'Version ID', type: 'string', demandOption: true })
       .positional('review-id', { describe: 'Review ID', type: 'string', demandOption: true })
-      .option('developer-notes', { describe: 'Replacement developer notes', type: 'string' })
+      .option('developer-notes', { describe: 'Non-empty replacement developer notes, at most 65535 UTF-8 bytes', type: 'string' })
       .option('seen', { describe: 'Set seen_by_developer', type: 'boolean' }), async argv => {
       const data = await resolveMutationInput(argv, updateInput, () => ({
         ...(argv.developerNotes === undefined ? {} : { developer_notes: argv.developerNotes }),

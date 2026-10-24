@@ -334,7 +334,7 @@ void test('semantic validation fails closed on every unknown table, join source,
     { from: 'dbt_p4d_quick_stats', select: [{ field: 'pokifordevs_games.title' }] },
     {
       from: 'dbt_p4d_gameplays',
-      select: [{ constant: 'title', alias: 'unknown_join_table.title' }],
+      select: [{ constant: 'title', alias: 'title' }],
       group: ['unknown_join_table.title']
     }
   ]
@@ -394,7 +394,7 @@ void test('conditions may reference known select output names but not hide unkno
     ],
     where: {
       expressions: [
-        ['playing_users', '>', 0],
+        ['daily_playing_users', '>', 0],
         ['title', '!=', ''],
         ['p4d_game_id', '==', 'game-1']
       ]
@@ -844,4 +844,47 @@ void test('arbitrary JSON survives hostile nesting depth with a structural error
     assert.deepEqual(error.details, { expected: { max_depth: 64 }, received: { kind: 'array' } })
     return true
   })
+})
+
+void test('SQL grouping rejects ungrouped fields while preserving aliases and nested aggregates', () => {
+  const count = { aggregate: 'count', alias: 'n' }
+  const query = (select: unknown[], extra: Record<string, unknown> = {}): Record<string, unknown> => ({ from: 'dbt_p4d_gameplays', select, ...extra })
+  const validate = (value: Record<string, unknown>): void => {
+    validateDataQuery(value)
+    validateDataQuerySemantics(value)
+  }
+  assert.throws(() => validate(query([{ field: 'date' }, count])), /date must be grouped or aggregated/)
+  assert.throws(() => validate(query([count], { order: [{ field: 'date' }] })), /date must be grouped or aggregated/)
+  assert.throws(() => validate(query([count], { group: ['n'] })), /group cannot contain aggregate/)
+  assert.throws(() => validate(query([{ alias: 'mixed', formula: { operator: '+', terms: [{ field: 'gameplays' }, { aggregate: 'count' }] } }])), /gameplays must be grouped or aggregated/)
+  assert.throws(() => validate(query([{ field: 'date' }, count], { group: ['country_id'] })), /date must be grouped or aggregated/)
+  assert.doesNotThrow(() => validate(query([{ field: 'date', alias: 'day' }, count], { group: ['day'], order: [{ field: 'day' }, { field: 'n' }] })))
+  assert.doesNotThrow(() => validate(query([{ field: 'date' }, count], { group: ['dbt_p4d_gameplays.date'] })))
+  assert.doesNotThrow(() => validate(query([{ alias: 'n', function: { name: 'toString', args: [{ aggregate: 'count' }] } }])))
+  const lower = { function: { name: 'lower', args: [{ field: 'country_id' }] } }
+  assert.doesNotThrow(() => validate(query([{ ...lower, alias: 'country' }, { alias: 'country_length', function: { name: 'length', args: [lower] } }, count], { group: ['country'] })))
+  assert.doesNotThrow(() => validate(query([{ field: 'date' }])))
+})
+
+void test('function operand types are checked through fields, constants, and nested expressions', () => {
+  const query = (fn: unknown): Record<string, unknown> => ({ from: 'dbt_p4d_gameplays', select: [{ alias: 'result', function: fn }] })
+  for (const arg of [{ constant: 1 }, { field: 'gameplays' }, { aggregate: 'count' }, { function: { name: 'number', args: [{ constant: '1' }] } }]) {
+    assert.throws(() => validateDataQuerySemantics(query({ name: 'lower', args: [arg] })), /must produce string for lower; received number/)
+  }
+  assert.throws(() => validateDataQuerySemantics(query({ name: 'length', args: [{ field: 'gameplays' }] })), /must produce string or array/)
+  assert.throws(() => validateDataQuerySemantics(query({ name: 'toDate', args: [{ field: 'date' }, { constant: 2 }] })), /must produce string for toDate/)
+  assert.doesNotThrow(() => validateDataQuerySemantics(query({ name: 'lower', args: [{ field: 'country_id' }] })))
+  assert.doesNotThrow(() => validateDataQuerySemantics(query({ name: 'lower', args: [{ function: { name: 'toString', args: [{ field: 'gameplays' }] } }] })))
+  assert.throws(() => validateDataQuerySemantics({ from: 'dbt_p4d_gameplays', select: [{ field: 'date' }], where: { expressions: [[{ function: { name: 'upper', args: [{ constant: true }] } }, '==', 'YES']] } }), /must produce string for upper/)
+})
+
+void test('array predicates reject scalar columns throughout expressions and allow real arrays', () => {
+  for (const operator of ['has', 'has_any_int64', 'has_any_uint64', 'has_any_float64', 'has_any_string']) {
+    const expression = ['country_id', operator, operator === 'has' ? 'US' : ['1']]
+    const where = { expressions: [{ operator: 'or', expressions: [expression] }] }
+    assert.throws(() => validateDataQuerySemantics({ from: 'dbt_p4d_gameplays', select: [{ field: 'date' }], where }), /requires an array column/)
+    assert.throws(() => validateDataQuerySemantics({ from: 'dbt_p4d_gameplays', select: [{ aggregate: 'count', alias: 'n', condition: where }] }), /requires an array column/)
+  }
+  assert.throws(() => validateDataQuerySemantics({ from: 'dbt_p4d_gameplays', select: [{ field: 'country_id', alias: 'country' }], where: { expressions: [['country', 'has', 'US']] } }), /requires an array column/)
+  assert.doesNotThrow(() => validateDataQuerySemantics({ from: 'dbt_p4d_game_events_funnel_v2', select: [{ aggregate: 'count', alias: 'n' }], where: { expressions: [['prefix_hashes', 'has_any_int64', ['123']]] } }))
 })

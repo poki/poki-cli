@@ -3,16 +3,10 @@ import { decode } from '@toon-format/toon'
 
 import { CliError, inputError } from './errors'
 
-const zeroWidthPattern = /[\u200B-\u200D\uFEFF]/u
-
-// JavaScript string.length counts UTF-16 code units while the API validates
-// Unicode code points. Keep local length checks on the same unit as the API.
+// Count Unicode code points for character-based backend limits. Backend
+// validation.Length rules use UTF-8 bytes instead: use Buffer.byteLength there.
 export function characterCount (value: string): number {
   return Array.from(value).length
-}
-
-export function containsZeroWidthCharacter (value: string): boolean {
-  return zeroWidthPattern.test(value)
 }
 
 async function readStdin (): Promise<string> {

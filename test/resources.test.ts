@@ -72,7 +72,7 @@ void test('resource commands use the expected routes, normalized output, and mut
 
     if (req.method === 'POST' && req.url === '/games/game-1/player_fit_tests') {
       observedBodies.push(await requestBody(req))
-      jsonApi(res, { data: { type: 'player_fit_tests', id: 'fit-1', attributes: { target_count: 500 } } }, 201)
+      jsonApi(res, { data: { type: 'player_fit_tests', id: 'fit-1', attributes: { target_gameplays: 500 } } }, 201)
       return
     }
     if (req.method === 'GET' && req.url !== undefined && req.url.startsWith('/games/game-1/playtest-recordings?')) {
@@ -98,10 +98,12 @@ void test('resource commands use the expected routes, normalized output, and mut
   const fit = await runCli(['player-fit-tests', 'create', '--game', 'game-1', '--version', 'version-1', '--format', 'json'], { env })
   assert.equal(fit.code, 0, fit.stderr)
   const fitDocument = observedBodies[0] as unknown as { data: { attributes: Record<string, unknown> } }
-  assert.equal(fitDocument.data.attributes.target_count, 500)
+  assert.equal(fitDocument.data.attributes.target_gameplays, 500)
   assert.equal(fitDocument.data.attributes.version_id, 'version-1')
-  assert.deepEqual(fitDocument.data.attributes.device_categories, ['mobile', 'desktop', 'tablet'])
-  assert.equal(fitDocument.data.attributes.device_category, undefined)
+  assert.equal(fitDocument.data.attributes.device_category, 'any')
+  for (const field of ['device_categories', 'test_version', 'target_count']) {
+    assert.equal(fitDocument.data.attributes[field], undefined, field)
+  }
 
   const videoUrl = 'https://storage.googleapis.com/poki-playtest-recordings/recording-1.webm'
   const metadataJsonUrl = 'https://storage.googleapis.com/poki-playtest-recordings/recording-1.json'
@@ -274,7 +276,7 @@ void test('game-scoped commands route via the project game by default and via ex
       return
     }
     if (req.method === 'POST' && url.pathname === '/games/game-1/player_fit_tests') {
-      jsonApi(res, { data: { type: 'player_fit_tests', id: 'new-fit-test', attributes: { target_count: 500 } } }, 201)
+      jsonApi(res, { data: { type: 'player_fit_tests', id: 'new-fit-test', attributes: { target_gameplays: 500 } } }, 201)
       return
     }
     if (req.method === 'GET' && url.pathname === '/games/game-1/playtest-recordings') {
@@ -495,7 +497,6 @@ void test('mutation adapters build constrained JSON:API documents and enforce de
     ['--thumbnail', 'rejected-thumbnail'],
     ['--data', '{"annotations":{"exclusivity":"exclusive"}}'],
     ['--data', '{"annotations":{}}'],
-    ['--engine', 'UPPERCASE'],
     ['--data', '{"title":"Rejected title"}']
   ]) {
     const before = mutationRequests
@@ -728,8 +729,7 @@ void test('--dry-run previews the resolved mutation without contacting the API',
   assert.ok(Array.isArray(preview.side_effects) && preview.side_effects.length > 0)
 
   const shortUnicodeTitle = await runCli(['game-change-requests', 'create', '--game', 'game-1', '--title', '😀😀', '--dry-run', '--format', 'json'], { env })
-  assert.equal(shortUnicodeTitle.code, 2)
-  assert.match(JSON.parse(shortUnicodeTitle.stderr).error.message, /3 through 128 characters/)
+  assert.equal(shortUnicodeTitle.code, 0, shortUnicodeTitle.stderr)
 
   const unicodeTitle = await runCli(['game-change-requests', 'create', '--game', 'game-1', '--title', '😀😀😀', '--dry-run', '--format', 'json'], { env })
   assert.equal(unicodeTitle.code, 0, unicodeTitle.stderr)
@@ -785,25 +785,64 @@ void test('--dry-run previews the resolved mutation without contacting the API',
   const reservedSeparator = await runCli([
     'game-events', 'create', '--game', 'game-1', '--category', 'progress^chapter', '--action', 'tutorial', '--description', 'Invalid', '--dry-run', '--format', 'json'
   ], { env })
-  assert.equal(reservedSeparator.code, 2)
-  assert.match(JSON.parse(reservedSeparator.stderr).error.message, /must not contain.*\^/)
+  assert.equal(reservedSeparator.code, 0, reservedSeparator.stderr)
 
   const unicodeEvent = await runCli([
-    'game-events', 'create', '--game', 'game-1', '--category', '😀'.repeat(64), '--action', 'tutorial', '--description', 'Valid', '--dry-run', '--format', 'json'
+    'game-events', 'create', '--game', 'game-1', '--category', '😀'.repeat(16), '--action', 'tutorial', '--description', 'Valid', '--dry-run', '--format', 'json'
   ], { env })
   assert.equal(unicodeEvent.code, 0, unicodeEvent.stderr)
 
   const longUnicodeEvent = await runCli([
-    'game-events', 'create', '--game', 'game-1', '--category', '😀'.repeat(65), '--action', 'tutorial', '--description', 'Invalid', '--dry-run', '--format', 'json'
+    'game-events', 'create', '--game', 'game-1', '--category', '😀'.repeat(16) + 'é', '--action', 'tutorial', '--description', 'Invalid', '--dry-run', '--format', 'json'
   ], { env })
-  assert.equal(longUnicodeEvent.code, 2)
-  assert.match(JSON.parse(longUnicodeEvent.stderr).error.message, /1 through 64 characters/)
+  assert.equal(longUnicodeEvent.code, 0, longUnicodeEvent.stderr)
 
   const zeroWidthEvent = await runCli([
     'game-events', 'create', '--game', 'game-1', '--category', 'pro\u200Bgress', '--action', 'tutorial', '--description', 'Invalid', '--dry-run', '--format', 'json'
   ], { env })
-  assert.equal(zeroWidthEvent.code, 2)
-  assert.match(JSON.parse(zeroWidthEvent.stderr).error.message, /zero-width/)
+  assert.equal(zeroWidthEvent.code, 0, zeroWidthEvent.stderr)
+
+  for (const field of ['category', 'action', 'label']) {
+    for (const input of [[`--${field}`, 'renamed'], ['--data', JSON.stringify({ [field]: 'renamed' })]]) {
+      const result = await runCli(['game-events', 'update', 'event-1', '--game', 'game-1', ...input, '--format', 'json'], { env })
+      assert.equal(result.code, 2, result.stdout)
+    }
+  }
+
+  for (const data of [
+    { category: 'level1', action: 'step2', label: 'attempt3' },
+    { category: 'level{N}', action: 'step{n}', label: 'attempt3' },
+    { category: 'a'.repeat(62) + '1', action: 'start' }
+  ]) {
+    for (const input of [Object.entries(data).flatMap(([field, value]) => [`--${field}`, value]).concat(['--description', 'Track progress']), ['--data', JSON.stringify({ ...data, description: 'Track progress' })]]) {
+      const result = await runCli(['game-events', 'create', '--game', 'game-1', ...input, '--dry-run', '--format', 'json'], { env })
+      assert.equal(result.code, 0, result.stderr)
+      assert.deepEqual(JSON.parse(result.stdout).request.body.data.attributes, { ...data, description: 'Track progress' })
+    }
+  }
+
+  for (const category of ['a'.repeat(61) + '1', 'level' + '1'.repeat(70)]) {
+    const result = await runCli([
+      'game-events', 'create', '--game', 'game-1', '--category', category,
+      '--action', ' step{N} ', '--label', ' COMPLETE ', '--description', 'Track progress',
+      '--dry-run', '--format', 'json'
+    ], { env })
+    assert.equal(result.code, 0, result.stderr)
+    const attributes = JSON.parse(result.stdout).request.body.data.attributes
+    assert.equal(attributes.category, category)
+    assert.equal(attributes.action, ' step{N} ')
+    assert.equal(attributes.label, ' COMPLETE ')
+  }
+
+  const metadataUpdate = await runCli([
+    'game-events', 'update', 'event-1', '--game', 'game-1',
+    '--data', '{"description":"Updated","enabled":false,"include_in_funnel":true}',
+    '--dry-run', '--format', 'json'
+  ], { env })
+  assert.equal(metadataUpdate.code, 0, metadataUpdate.stderr)
+  assert.deepEqual(JSON.parse(metadataUpdate.stdout).request.body.data.attributes, {
+    description: 'Updated', enabled: false, include_in_funnel: true
+  })
 
   assert.equal(requests, 0)
 })
@@ -817,30 +856,9 @@ void test('per-group local validation rejects bad input before any HTTP request'
   }, 'local-validation')
 
   const failures: Array<{ args: string[], message: RegExp }> = [
-    {
-      args: ['game-events', 'create', '--game', 'game-1', '--category', 'a/b', '--action', 'what', '--description', 'd'],
-      message: /category must contain 1 through 64 characters and must not contain '\/'/
-    },
-    {
-      args: ['game-events', 'create', '--game', 'game-1', '--category', 'a'.repeat(65), '--action', 'what', '--description', 'd'],
-      message: /category must contain 1 through 64 characters/
-    },
-    {
-      args: ['game-events', 'create', '--game', 'game-1', '--category', 'progress', '--action', 'what'],
-      message: /description is required/
-    },
-    {
-      args: ['reviews', 'request', '--game', 'game-1', '--version', 'version-1'],
-      message: /developer_notes is required/
-    },
-    {
-      args: ['games', 'update', 'game-1', '--privacy-policy-url', 'not-a-url'],
-      message: /privacy_policy_url must be an absolute URL/
-    },
-    {
-      args: ['versions', 'update', 'version-1', '--game', 'game-1', '--label', 'x'.repeat(257)],
-      message: /label must contain at most 256 characters/
-    }
+    { args: ['game-events', 'create', '--game', 'game-1', '--category', 'progress', '--action', 'what'], message: /description must be a string/ },
+    { args: ['reviews', 'request', '--game', 'game-1', '--version', 'version-1'], message: /developer_notes is required/ },
+    { args: ['versions', 'update', 'version-1', '--game', 'game-1', '--label', 'x'.repeat(257)], message: /label must contain at most 256 UTF-8 bytes/ }
   ]
   for (const { args, message } of failures) {
     const result = await runCli([...args, '--format', 'json'], { env })
@@ -898,6 +916,17 @@ void test('playtest request replacement validates then cancels and recreates wit
     res.writeHead(404)
     res.end()
   }, 'request-edit')
+
+  for (const input of [
+    ['--category', '1'.repeat(513)],
+    ['--data', JSON.stringify({ categories: Array(257).fill('1').join(',') })]
+  ]) {
+    const rejected = await runCli(['playtest-requests', 'replace', 'request-1', '--game', 'game-1', ...input, '--yes', '--format', 'json'], { env })
+    assert.equal(rejected.code, 2, rejected.stderr)
+    assert.match(JSON.parse(rejected.stderr).error.message, /512 characters/)
+    assert.deepEqual(operations, ['GET /games/game-1'])
+    operations.length = 0
+  }
 
   const preview = await runCli(['playtest-requests', 'replace', 'request-1', '--game', 'game-1', '--orientation', 'portrait', '--dry-run', '--format', 'json'], { env })
   assert.equal(preview.code, 0, preview.stderr)
@@ -1245,44 +1274,27 @@ void test('game creation always directs users to the manual workflow without con
   assert.equal(requests, 0)
 })
 
-void test('Player Fit creation supports every device selection and validates array input', async () => {
+void test('Player Fit creation uses the current API audience and target fields', async () => {
   const args = ['player-fit-tests', 'create', '--game', 'game-1', '--version', 'version-1', '--dry-run', '--format', 'json']
-  const devices = ['mobile', 'desktop', 'tablet']
-  for (let mask = 1; mask < 8; mask++) {
-    const selected = devices.filter((_, index) => (mask & (1 << index)) !== 0)
-    const result = await runCli([...args, ...selected.flatMap(device => ['--device-category', device])])
-    assert.equal(result.code, 0, result.stderr)
-    const attributes = JSON.parse(result.stdout).request.body.data.attributes
-    assert.deepEqual(attributes.device_categories, selected)
-    assert.equal(attributes.device_category, undefined)
-    assert.equal(attributes.target_count, 500)
-    assert.equal(attributes.target_gameplays, undefined)
-    assert.equal(attributes.test_version, 2)
+  for (const device of ['any', 'desktop', 'mobile']) {
+    for (const input of [['--device-category', device], ['--data', JSON.stringify({ device_category: device })]]) {
+      const result = await runCli([...args, ...input])
+      assert.equal(result.code, 0, result.stderr)
+      const attributes = JSON.parse(result.stdout).request.body.data.attributes
+      assert.equal(attributes.device_category, device)
+      assert.equal(attributes.target_gameplays, 500)
+      for (const field of ['device_categories', 'test_version', 'target_count']) {
+        assert.equal(attributes[field], undefined, field)
+      }
+    }
   }
-  const fromData = await runCli([...args, '--data', JSON.stringify({ device_categories: ['tablet'] })])
-  assert.equal(fromData.code, 0, fromData.stderr)
-  assert.deepEqual(JSON.parse(fromData.stdout).request.body.data.attributes.device_categories, ['tablet'])
-  for (const selection of [[], ['any'], ['mobile', 'mobile'], [''], 'tablet', [null]]) {
-    const invalid = await runCli([...args, '--data', JSON.stringify({ device_categories: selection })])
-    assert.equal(invalid.code, 2, invalid.stdout)
-    assert.match(JSON.parse(invalid.stderr).error.message, /device_categories/)
-  }
-  const legacy = await runCli([...args, '--data', JSON.stringify({ device_category: 'mobile' })])
-  assert.equal(legacy.code, 2)
-})
-
-void test('Player Fit methodology defaults, legacy selection, and invalid versions', async () => {
-  const args = ['player-fit-tests', 'create', '--game', 'game-1', '--version', 'version-1', '--dry-run', '--format', 'json']
-  for (const devices of [['mobile', 'desktop', 'tablet'], ['desktop'], ['mobile', 'tablet']]) {
-    const result = await runCli([...args, '--test-version', '1', ...devices.flatMap(device => ['--device-category', device])])
-    assert.equal(result.code, 0, result.stderr)
-    assert.equal(JSON.parse(result.stdout).request.body.data.attributes.test_version, 1)
-  }
-  const data = await runCli([...args, '--data', '{"test_version":1}'])
-  assert.equal(data.code, 0, data.stderr)
-  assert.equal(JSON.parse(data.stdout).request.body.data.attributes.test_version, 1)
-  for (const data of [{ test_version: 3 }, { test_version: '1' }, { test_version: 1, device_categories: ['tablet'] }, { test_version: 1, device_categories: ['mobile'] }]) {
-    const result = await runCli([...args, '--data', JSON.stringify(data)])
+  for (const input of [
+    ['--device-category', 'tablet'],
+    ['--device-category', 'mobile', '--device-category', 'desktop'],
+    ['--test-version', '2'],
+    ...[{ device_categories: ['mobile'] }, { test_version: 1 }, { target_count: 500 }, { target_gameplays: 1000 }, { device_category: ['mobile'] }].map(data => ['--data', JSON.stringify(data)])
+  ]) {
+    const result = await runCli([...args, ...input])
     assert.equal(result.code, 2, result.stdout)
   }
 })
@@ -1304,4 +1316,176 @@ void test('playtest creation maps legacy flags to device arrays and accepts expl
     const result = await runCli(['playtest-requests', 'create', '--game', 'game-1', '--version', 'version-1', '--data', JSON.stringify({ device_categories: devices }), '--format', 'json', '--dry-run'])
     assert.equal(result.code, 2, result.stdout)
   }
+})
+
+void test('mutation text limits accept Unicode boundaries and reject oversized flags and data before requests', async t => {
+  let requests = 0
+  const { directory, env } = await apiHarness(t, (_req, res) => {
+    requests++
+    res.writeHead(500)
+    res.end()
+  }, 'mutation-text-limits')
+  const build = join(directory, 'build')
+  mkdirSync(build)
+  writeFileSync(join(build, 'index.html'), '<!doctype html>')
+  const notes = '😀'.repeat(16383) + 'abc'
+  const oversizedNotes = '😀'.repeat(16384)
+  const cases = [
+    { command: ['versions', 'update', 'v'], flag: '--label', field: 'label', valid: 'é'.repeat(128), invalid: 'é'.repeat(129), limit: '256 UTF-8 bytes' },
+    {
+      command: ['player-feedback-questions', 'create'],
+      flag: '--question',
+      field: 'question',
+      base: { start_date: '2026-10-01', end_date: '2026-10-02', feedback_message_types: ['bugreport'] },
+      valid: 'é'.repeat(5000),
+      invalid: 'é'.repeat(5001),
+      limit: '10000 UTF-8 bytes'
+    },
+    { command: ['playtest-requests', 'create', '--version', 'v'], flag: '--category', field: 'categories', valid: '1'.repeat(512), invalid: '1'.repeat(513), limit: '512 characters' },
+    { command: ['player-fit-tests', 'create', '--version', 'v'], flag: '--category', field: 'categories', valid: '1'.repeat(512), invalid: '1'.repeat(513), limit: '512 characters' },
+    { command: ['games', 'update', 'g'], flag: '--suggested-description', field: 'suggested_description', valid: notes, invalid: oversizedNotes, limit: '65535 UTF-8 bytes' },
+    { command: ['games', 'update', 'g'], flag: '--suggested-category', field: 'suggested_categories', valid: notes, invalid: oversizedNotes, limit: '65535 UTF-8 bytes' },
+    ...[
+      ['play-store-url', 'play_store_url', 'https://play.google.com/store/apps/details?id=app&x='],
+      ['apple-store-url', 'apple_store_url', 'https://apps.apple.com/app/id1?x='],
+      ['steam-url', 'steam_url', 'https://store.steampowered.com/app/1/?x=']
+    ].map(([flag, field, prefix]) => ({
+      command: ['game-change-requests', 'create'],
+      flag: `--${flag}`,
+      field,
+      valid: prefix + '😀'.repeat(2000 - prefix.length),
+      invalid: prefix + '😀'.repeat(2001 - prefix.length),
+      limit: '2000 characters'
+    })),
+    { command: ['versions', 'update', 'v'], flag: '--filename', field: 'filename', valid: '😀'.repeat(128), invalid: '😀'.repeat(129), limit: '128 characters' },
+    { command: ['versions', 'update', 'v'], flag: '--notes', field: 'notes', valid: notes, invalid: oversizedNotes, limit: '65535 UTF-8 bytes' },
+    { command: ['versions', 'upload', '--build-dir', build], flag: '--notes', field: undefined, valid: notes, invalid: oversizedNotes, limit: '65535 UTF-8 bytes' },
+    { command: ['reviews', 'request', '--version', 'v'], flag: '--developer-notes', field: 'developer_notes', valid: notes, invalid: oversizedNotes, limit: '65535 UTF-8 bytes' },
+    { command: ['reviews', 'update', 'v', 'r'], flag: '--developer-notes', field: 'developer_notes', valid: notes, invalid: oversizedNotes, limit: '65535 UTF-8 bytes' },
+    { command: ['playtest-recordings', 'update', 'r'], flag: '--tag', field: 'tags', valid: '  ' + '😀'.repeat(255) + '  ', invalid: '  ' + '😀'.repeat(256) + '  ', limit: '255 characters' }
+  ]
+  for (const entry of cases) {
+    for (const useData of entry.field === undefined ? [false] : [false, true]) {
+      const base = 'base' in entry ? entry.base : undefined
+      const baseFlags = Object.entries(base ?? {}).filter(([field]) => field !== entry.field).flatMap(([field, value]) => [
+        field === 'feedback_message_types' ? '--message-type' : `--${field.replaceAll('_', '-')}`,
+        ...(Array.isArray(value) ? value : [value])
+      ])
+      const input = (value: string): string[] => useData
+        ? ['--data', JSON.stringify({ ...base, [entry.field ?? 'notes']: entry.field === 'tags' ? [value] : value })]
+        : [...baseFlags, entry.flag, value]
+      const args = [...entry.command, '--game', 'g', '--format', 'json']
+      const accepted = await runCli([...args, ...input(entry.valid), '--dry-run'], { env })
+      assert.equal(accepted.code, 0, accepted.stderr)
+      for (const mode of [[], ['--dry-run']]) {
+        const rejected = await runCli([...args, ...input(entry.invalid), ...mode], { env })
+        assert.equal(rejected.code, 2, rejected.stderr)
+        const error = JSON.parse(rejected.stderr).error
+        assert.equal(error.code, 'INVALID_INPUT')
+        assert.ok(error.message.includes(entry.limit), error.message)
+      }
+    }
+  }
+  assert.equal(requests, 0)
+})
+
+void test('CSP syntax and normalization are delegated to the backend', async t => {
+  const received: unknown[] = []
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  const { env } = await apiHarness(t, async (req, res) => {
+    received.push(await requestBody(req))
+    res.writeHead(422, { 'Content-Type': 'application/vnd.api+json' })
+    res.end(JSON.stringify({ errors: [{ code: 'payload-validation-failed', detail: 'custom_content_security_policy is invalid: must be a valid Content-Security-Policy header value' }] }))
+  }, 'csp-validation')
+  for (const value of ['  img-src example.com ; ', 'future-directive value']) {
+    const args = ['game-change-requests', 'create', '--game', 'g', '--custom-content-security-policy', value, '--format', 'json']
+    const preview = await runCli([...args, '--dry-run'], { env })
+    assert.equal(preview.code, 0, preview.stderr)
+    assert.equal(JSON.parse(preview.stdout).request.body.data.attributes.custom_content_security_policy, value)
+    assert.equal(JSON.parse(preview.stdout).validation.backend_mutation_validated, false)
+    const result = await runCli(args, { env })
+    assert.equal(result.code, 4, result.stderr)
+    assert.match(JSON.parse(result.stderr).error.message, /must be a valid Content-Security-Policy/)
+    assert.deepEqual(received.at(-1), JSON.parse(preview.stdout).request.body)
+  }
+  assert.equal(received.length, 2, 'validation errors must not be retried')
+})
+
+void test('Player Fit country limits include commas in repeated flags and data', async t => {
+  let requests = 0
+  const { env } = await apiHarness(t, (_req, res) => { requests++; res.writeHead(500); res.end() }, 'country-limits')
+  const args = ['player-fit-tests', 'create', '--game', 'g', '--version', 'v', '--format', 'json']
+  for (const useData of [false, true]) {
+    const input = (count: number): string[] => useData
+      ? ['--data', JSON.stringify({ countries: Array(count).fill('US').join(',') })]
+      : Array.from({ length: count }, () => ['--country', 'US']).flat()
+    const accepted = await runCli([...args, ...input(171), '--dry-run'], { env })
+    assert.equal(accepted.code, 0, accepted.stderr)
+    assert.equal(JSON.parse(accepted.stdout).request.body.data.attributes.countries.length, 512)
+    for (const mode of [[], ['--dry-run']]) {
+      const rejected = await runCli([...args, ...input(172), ...mode], { env })
+      assert.equal(rejected.code, 2, rejected.stderr)
+      assert.match(JSON.parse(rejected.stderr).error.message, /512 characters/)
+    }
+  }
+  assert.equal(requests, 0)
+})
+
+void test('feedback question dates stay within storage bounds before requests', async t => {
+  let requests = 0
+  const { env } = await apiHarness(t, (_req, res) => { requests++; res.writeHead(500); res.end() }, 'question-date-limits')
+  const args = ['player-feedback-questions', 'create', '--game', 'g', '--format', 'json']
+  const input = (start: string | number, end: string | number): string[] => ['--data', JSON.stringify({
+    question: 'Why?', start_date: start, end_date: end, feedback_message_types: ['thumbs_up']
+  })]
+  for (const date of [0, 253402300799, '1000-01-01', '9999-12-31']) {
+    const accepted = await runCli([...args, ...input(date, date), '--dry-run'], { env })
+    assert.equal(accepted.code, 0, accepted.stderr)
+  }
+  for (const date of [253402300800, Number.MAX_SAFE_INTEGER + 1, 1e100, -1, 0.5, '0000-01-01', '0999-12-31', '10000-01-01']) {
+    for (const mode of [[], ['--dry-run']]) {
+      const rejected = await runCli([...args, ...input(date, date), ...mode], { env })
+      assert.equal(rejected.code, 2, rejected.stderr)
+      assert.equal(JSON.parse(rejected.stderr).error.code, 'INVALID_INPUT')
+    }
+  }
+  const invalidEnd = await runCli([...args, ...input(0, 253402300800)], { env })
+  assert.equal(invalidEnd.code, 2, invalidEnd.stderr)
+  assert.match(JSON.parse(invalidEnd.stderr).error.message, /end_date/)
+  for (const date of ['1000-01-01', '9999-12-31', '0000-01-01']) {
+    const result = await runCli([...args, '--question', 'Why?', '--start-date', date, '--end-date', date, '--message-type', 'thumbs_up', '--dry-run'], { env })
+    assert.equal(result.code, date === '0000-01-01' ? 2 : 0, result.stderr)
+  }
+  assert.equal(requests, 0)
+})
+
+void test('privacy URL syntax is left to the backend without rewriting input', async () => {
+  for (const value of ['https://example.com/privacy', ' https://example.com/privacy ', 'custom://example.com/privacy', 'not a URL']) {
+    for (const input of [['--privacy-policy-url', value], ['--data', JSON.stringify({ privacy_policy_url: value })]]) {
+      const result = await runCli(['games', 'update', 'g', ...input, '--dry-run', '--format', 'json'])
+      assert.equal(result.code, 0, result.stderr)
+      assert.equal(JSON.parse(result.stdout).request.body.data.attributes.privacy_policy_url, value)
+    }
+  }
+})
+
+void test('thumbnail data requires standard base64 with backend-compatible padding', async t => {
+  let requests = 0
+  const { env } = await apiHarness(t, (_req, res) => { requests++; res.writeHead(500); res.end() }, 'thumbnail-base64-validation')
+  const args = ['game-change-requests', 'create', '--game', 'g', '--format', 'json']
+  const input = (thumbnail: string): string[] => ['--data', JSON.stringify({ thumbnail })]
+  // Encoding validation is local; the backend separately validates image bytes.
+  for (const value of ['TQ==', 'TWE=', 'TWFu', '+/8=', 'T\r\nQ==\n', 'TR==']) {
+    const result = await runCli([...args, ...input(value), '--dry-run'], { env })
+    assert.equal(result.code, 0, result.stderr)
+  }
+  for (const value of ['', '%%%', 'TQ', 'TWE', 'TQ=', 'TQ===', '=TQ=', 'TQ==TWFu', '-_8=', 'T Q==', '\r\n', 'data:image/png;base64,TQ==']) {
+    for (const mode of [[], ['--dry-run']]) {
+      const result = await runCli([...args, ...input(value), ...mode], { env })
+      assert.equal(result.code, 2, result.stderr)
+      assert.equal(JSON.parse(result.stderr).error.code, 'INVALID_INPUT')
+      assert.match(JSON.parse(result.stderr).error.message, /base64/)
+    }
+  }
+  assert.equal(requests, 0)
 })

@@ -22,8 +22,7 @@ void test('reviews update validates structured field types before previewing or 
 
   for (const { data, message } of [
     { data: '{"developer_notes":42}', message: /developer_notes must be a string/ },
-    { data: '{"seen_by_developer":"false"}', message: /seen_by_developer must be a boolean/ },
-    { data: '{"developer_notes":"hidden\u200Bseparator"}', message: /developer_notes must not contain zero-width characters/ }
+    { data: '{"seen_by_developer":"false"}', message: /seen_by_developer must be a boolean/ }
   ]) {
     const result = await runCli([
       'reviews', 'update', 'version-1', 'review-1', '--game', 'game-1',

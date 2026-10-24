@@ -3,7 +3,7 @@ import { CliError, inputError, notFound } from '../errors'
 import { jsonValueKind, normalizeJsonApiCollection, ResourceResult, UnreadableResourceFields } from '../jsonapi'
 import { isRecord } from '../json'
 import type { ListCapabilities } from '../list-capabilities'
-import { listSearchParams } from '../query'
+import { listSearchParams, validateListQuery } from '../query'
 import { requestTimeout } from './command-options'
 import type { ExpectedJsonApiResource } from './resource-responses'
 
@@ -181,6 +181,7 @@ export async function listResources (
   onPage?: (body: unknown, resources: unknown[]) => boolean
 ): Promise<unknown> {
   assertListCapabilities(args, capabilities)
+  validateListQuery({ filter: asStrings(args.filter), sort: asStrings(args.sort) }, capabilities)
   if (!capabilities.pagination) {
     const query = listSearchParams({
       filter: capabilities.filter ? asStrings(args.filter) : undefined,

@@ -5,7 +5,7 @@ import type { Argv } from 'yargs'
 import { ApiClient } from '../api'
 import { gameChangeRequestsDocumentation } from '../docs/resources'
 import { inputError } from '../errors'
-import { characterCount, containsZeroWidthCharacter, requireChanges } from '../input'
+import { characterCount, requireChanges } from '../input'
 import { jsonApiDocument } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
 import { getProjectGameId } from '../project'
@@ -45,7 +45,6 @@ function reasons (values: unknown): Record<string, string> {
     const source = value.slice(0, separator).trim()
     const reason = value.slice(separator + 1).trim()
     if (separator <= 0 || source === '' || reason === '') throw inputError(`Invalid CSP reason '${value}'. Use source=reason.`)
-    if (characterCount(reason) > 200) throw inputError(`CSP reason for '${source}' must contain at most 200 characters.`)
     result[source] = reason
   }
   return result
@@ -98,13 +97,13 @@ export function registerGameChangeRequestCommands (yargs: Argv, api: ApiClient):
       }), argv)
     })
     .command('create', 'Request a title, thumbnail, store URL, or custom Content Security Policy change', create => withGameMutationOptions(withDataOption(create, 'JSON or TOON request fields; thumbnail must already be base64'), projectGameId, 'Game to change')
-      .option('title', { describe: 'Requested public title, 3 through 128 characters', type: 'string' })
-      .option('play-store-url', { describe: 'Google Play app URL; empty string clears it', type: 'string' })
-      .option('apple-store-url', { describe: 'Apple App Store app URL; empty string clears it', type: 'string' })
-      .option('steam-url', { describe: 'Steam app URL; empty string clears it', type: 'string' })
+      .option('title', { describe: 'Requested public title, 3 through 128 UTF-8 bytes', type: 'string' })
+      .option('play-store-url', { describe: 'Google Play app URL, at most 2000 characters; empty string clears it', type: 'string' })
+      .option('apple-store-url', { describe: 'Apple App Store app URL, at most 2000 characters; empty string clears it', type: 'string' })
+      .option('steam-url', { describe: 'Steam app URL, at most 2000 characters; empty string clears it', type: 'string' })
       .option('thumbnail-ab-test-id', { describe: 'Use the winning thumbnail from a completed A/B test; cannot combine with other changes', type: 'string' })
       .option('thumbnail-file', { describe: 'Image file encoded to the API thumbnail field as base64', type: 'string' })
-      .option('custom-content-security-policy', { describe: 'Requested CSP string; use an empty string to remove the custom CSP', type: 'string' })
+      .option('custom-content-security-policy', { describe: 'Requested CSP string, at most 1024 characters; use an empty string to remove the custom CSP', type: 'string' })
       .option('csp-reason', { describe: 'CSP source and reason in source=reason form; repeatable; each reason is at most 200 characters', type: 'array', string: true }), async argv => {
       // Read inside the flag branch: --data and --thumbnail-file are mutually
       // exclusive, so an unreadable file must never pre-empt that rejection.
@@ -123,38 +122,24 @@ export function registerGameChangeRequestCommands (yargs: Argv, api: ApiClient):
         }
       })
       requireChanges(data)
-      if (data.title !== undefined && (typeof data.title !== 'string' || characterCount(data.title.trim()) < 3 || characterCount(data.title) > 128)) throw inputError('title must contain 3 through 128 characters.')
-      if (typeof data.title === 'string' && containsZeroWidthCharacter(data.title)) throw inputError('title must not contain zero-width characters.')
-      if (data.thumbnail !== undefined && (typeof data.thumbnail !== 'string' || data.thumbnail === '')) throw inputError('thumbnail must be a non-empty base64 string.')
-      if (data.custom_content_security_policy !== undefined && typeof data.custom_content_security_policy !== 'string') throw inputError('custom_content_security_policy must be a string.')
+      for (const field of ['title', 'thumbnail', 'custom_content_security_policy', 'play_store_url', 'apple_store_url', 'steam_url', 'thumbnail_ab_test_id']) {
+        if (data[field] !== undefined && typeof data[field] !== 'string') throw inputError(`${field} must be a string.`)
+      }
+      if (typeof data.thumbnail === 'string') {
+        const encoded = data.thumbnail.replace(/[\r\n]/g, '')
+        if (encoded.length === 0 || encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+          throw inputError('thumbnail must be a non-empty standard base64 string with valid padding.')
+        }
+      }
       if (data.custom_content_security_policy_reasons !== undefined) {
         const suppliedReasons = data.custom_content_security_policy_reasons
-        if (suppliedReasons === null || typeof suppliedReasons !== 'object' || Array.isArray(suppliedReasons) || Object.entries(suppliedReasons).some(([source, reason]) => source.trim() === '' || typeof reason !== 'string' || reason.trim() === '' || characterCount(reason) > 200)) {
-          throw inputError('custom_content_security_policy_reasons must map non-empty sources to strings of at most 200 characters.')
+        if (suppliedReasons === null || typeof suppliedReasons !== 'object' || Array.isArray(suppliedReasons) || Object.values(suppliedReasons).some(reason => typeof reason !== 'string')) {
+          throw inputError('custom_content_security_policy_reasons must map sources to strings.')
         }
       }
-      for (const [field, pattern] of [
-        ['play_store_url', /^https:\/\/play\.google\.com\/store\/apps\/details\?([^#]*&)?id=[A-Za-z0-9._]+(&[^#]*)?$/],
-        ['apple_store_url', /^https:\/\/apps\.apple\.com\/([a-z]{2}\/)?app\/([^/?#]+\/)?id[0-9]+([/?#].*)?$/],
-        ['steam_url', /^https:\/\/store\.steampowered\.com\/app\/[0-9]+(\/[^?#]*)?([?#].*)?$/]
-      ] as const) {
-        const value = data[field]
-        if (value === undefined) continue
-        if (typeof value !== 'string' || (value.trim() !== '' && !pattern.test(value.trim()))) {
-          throw inputError(`${field} must be a valid store app URL or an empty string to clear it.`)
-        }
-        data[field] = value.trim()
-      }
-      if (data.thumbnail_ab_test_id !== undefined) {
-        if (typeof data.thumbnail_ab_test_id !== 'string' || data.thumbnail_ab_test_id.trim() === '') {
-          throw inputError('thumbnail_ab_test_id must be a non-empty test ID.')
-        }
-        if (Object.keys(data).some(field => field !== 'thumbnail_ab_test_id')) {
-          throw inputError('thumbnail_ab_test_id cannot be combined with other changes.')
-        }
-      }
-      if (!['title', 'thumbnail', 'custom_content_security_policy', 'play_store_url', 'apple_store_url', 'steam_url', 'thumbnail_ab_test_id'].some(field => data[field] !== undefined)) {
-        throw inputError('At least one title, thumbnail, store URL, or custom_content_security_policy change is required.')
+      // Store URL columns have a storage limit that the model does not validate.
+      for (const field of ['play_store_url', 'apple_store_url', 'steam_url']) {
+        if (typeof data[field] === 'string' && characterCount(data[field].trim()) > 2000) throw inputError(`${field} must contain at most 2000 characters.`)
       }
       const path = pathFor(argv.game)
       const body = jsonApiDocument('game_change_requests', data)
@@ -164,7 +149,7 @@ export function registerGameChangeRequestCommands (yargs: Argv, api: ApiClient):
           ...data,
           thumbnail: thumbnail?.preview ?? {
             encoding: 'base64',
-            encoded_characters: data.thumbnail.length,
+            encoded_characters: String(data.thumbnail).length,
             value_omitted: true
           }
         })

@@ -53,10 +53,10 @@ export const queryDescription = {
     from: 'Required bundled top-level table name. Use `poki data tables` to discover the complete source allowlist for this CLI.',
     select: 'Required non-empty array of select statements.',
     where: 'Top-level condition statement: {operator?: "and", expressions: [condition or nested statement, ...]}. The top level is always conjunctive for developer access: omit operator for the normal AND default or set it to and. A top-level or is rejected because the deployed API rewrites it to AND; put OR expressions inside a nested condition statement instead.',
-    group: 'Array of field names.',
+    group: 'Array of field names or selected aliases. In aggregate queries every selected or ordered field outside an aggregate must be grouped; aggregate outputs cannot be grouping keys.',
     order: 'Array of {field, direction?: "asc|desc", numeric?: boolean}. Numeric ordering treats embedded numbers naturally.',
-    limit: 'Positive row limit; the server defaults to 10000.',
-    offset: 'Non-negative row offset.',
+    limit: 'Positive safe integer row limit (at most 9007199254740991); the server defaults to 10000.',
+    offset: 'Non-negative safe integer row offset (at most 9007199254740991).',
     include: `Map of a selected output column name (the alias when set) to {type: RESOURCE_TYPE}. Valid types: ${includeResourceTypes.join(', ')}. Each row's column value is used as a resource ID; IDs with no match are silently omitted from the response included map.`
   },
   joins: joinPolicy,
@@ -98,8 +98,9 @@ export const queryDescription = {
   select_statement: {
     expression_source: 'Use exactly one of field, formula, function, or constant. An aggregate may wrap a field, formula, or function, but not a constant. Non-distinct count is the only exception: it takes no expression source.',
     field: 'Field name, optionally qualified with a server-supported join table.',
-    alias: 'Output field name; required for count and every top-level computed expression (formula, function, or constant). Top-level output names must be unique. Nested select statements inside computed expressions do not need aliases.',
+    alias: 'Unqualified output field name without dots; required for count and every top-level computed expression (formula, function, or constant). Top-level output names must be unique. Nested select statements inside computed expressions do not need aliases.',
     aggregate: aggregates,
+    aggregate_placement: 'Aggregates cannot be nested inside other aggregates or used in where conditions, including through an output alias. Scalar functions may wrap aggregates.',
     distinct: 'Accepted only with count. Set true and provide exactly one field, formula, or function expression to count distinct values.',
     weight: 'Accepted only with topKWeighted; names its required weight column.',
     level: 'Accepted only with quantileTDigest; required quantile from 0.01 through 0.99.',
@@ -151,12 +152,12 @@ export const queryDescription = {
       },
       has: {
         operators: comparisonOperatorFamilies.has,
-        right: 'One string or numeric value matched against an Array-typed left column. The CLI validates the operand shape; the deployed API remains authoritative for the column and element types. Use has_any_int64, not has, for signed funnel prefix hashes so their exact decimal strings are cast to Int64.',
+        right: 'One string or numeric value matched against an Array-typed left column. The CLI validates the operand shape; the CLI rejects known scalar left columns; the deployed API remains authoritative for element types. Use has_any_int64, not has, for signed funnel prefix hashes so their exact decimal strings are cast to Int64.',
         example: ['tags', 'has', 'beta']
       },
       has_any: {
         operators: comparisonOperatorFamilies.hasAny,
-        right: 'Non-empty array of string or numeric values of the element type named by the operator, matched against an Array-typed left column. has_any_int64 requires exact base-10 signed integer strings so 64-bit values never pass through JavaScript numbers. The CLI validates the operand shape; the deployed API remains authoritative for casts, the column, and element types.',
+        right: 'Non-empty array of string or numeric values of the element type named by the operator, matched against an Array-typed left column. has_any_int64 requires exact base-10 signed integer strings so 64-bit values never pass through JavaScript numbers. The CLI validates the operand shape; the CLI rejects known scalar left columns; the deployed API remains authoritative for casts and element types.',
         example: ['prefix_hashes', 'has_any_int64', ['-8340446448795919230']],
         signed_int64_precision: 'dbt_p4d_game_events_funnel_v2.prefix_hashes is Array(Int64). Copy hashes emitted by toString(event_hash) or groupUniqArray(toString(event_hash)) verbatim into has_any_int64 as decimal strings. On that table, the CLI rejects scalar has and every other direct prefix_hashes operator. The sole derived condition exception is [{function: {name: "length", args: [{field: "prefix_hashes"}]}}, "==", 0], which identifies the empty prefix. Never parse or write hashes as JavaScript numbers.'
       },
@@ -173,12 +174,17 @@ export const queryDescription = {
     rules: {
       concat: 'At least two select-statement arguments.',
       if: 'Exactly three arguments: a condition tuple first, then two select statements.',
-      other: 'At least one select-statement argument.'
+      lower: 'Exactly one string-producing select-statement argument.',
+      upper: 'Exactly one string-producing select-statement argument.',
+      length: 'Exactly one string- or array-producing select-statement argument.',
+      number: 'Exactly one select-statement argument.',
+      toDate: 'One select-statement argument and an optional string timezone.',
+      toString: 'One select-statement argument and an optional string timezone.'
     }
   },
   limits: {
     default_limit: 10000,
-    default_limit_note: 'Applied when limit is omitted; the server documents no maximum.',
+    default_limit_note: 'Applied when limit is omitted. The CLI limits explicit limit and offset to exact JavaScript integers (at most 9007199254740991).',
     minimum_limit: 1,
     minimum_offset: 0
   },
@@ -419,6 +425,8 @@ function validateFunction (value: unknown, label: string): void {
     }, 'Run `poki data describe functions` for argument rules.')
   }
   if (!Array.isArray(value.args)) throw inputError(`${label}.args must be an array.`)
+  if (['lower', 'upper', 'length', 'number'].includes(value.name) && value.args.length !== 1) throw inputError(`${label}.args must contain exactly one argument for ${value.name}.`)
+  if (['toDate', 'toString'].includes(value.name) && value.args.length > 2) throw inputError(`${label}.args must contain one argument and an optional timezone for ${value.name}.`)
   if (value.name === 'if' && value.args.length !== 3) throw inputError(`${label}.args must contain exactly three arguments for if.`)
   if (value.name === 'concat' && value.args.length < 2) throw inputError(`${label}.args must contain at least two arguments for concat.`)
   if (value.name !== 'if' && value.name !== 'concat' && value.args.length < 1) throw inputError(`${label}.args must not be empty.`)
@@ -441,7 +449,10 @@ function validateSelectStatement (
   const keys = ['field', 'alias', 'aggregate', 'distinct', 'weight', 'level', 'val', 'condition', 'formula', 'function', 'constant']
   rejectUnknownKeys(value, keys, label)
   if (value.field !== undefined) validateField(value.field, `${label}.field`)
-  if (value.alias !== undefined) validateField(value.alias, `${label}.alias`)
+  if (value.alias !== undefined) {
+    validateField(value.alias, `${label}.alias`)
+    if (typeof value.alias === 'string' && value.alias.includes('.')) throw inputError(`${label}.alias must be an unqualified output name without dots.`)
+  }
   if (value.weight !== undefined) validateField(value.weight, `${label}.weight`)
   if (value.val !== undefined) validateField(value.val, `${label}.val`)
   if (value.distinct !== undefined && typeof value.distinct !== 'boolean') throw inputError(`${label}.distinct must be a boolean.`)
@@ -680,6 +691,36 @@ function validateFunnelHashConditions (query: Record<string, unknown>): void {
   }
 }
 
+function validateAggregatePlacement (query: Record<string, unknown>): void {
+  const aggregateOutputs = new Set<string>()
+  if (Array.isArray(query.select)) {
+    query.select.forEach((statement, index) => {
+      let containsAggregate = false
+      visitSelectExpression(statement, {
+        select: (value, context) => {
+          if (typeof value.aggregate !== 'string') return
+          containsAggregate = true
+          if (context.enclosingAggregate !== undefined) throw inputError(`${context.path}: aggregates cannot be nested inside another aggregate.`)
+        }
+      }, { path: `select[${index}]` })
+      if (containsAggregate && isRecord(statement)) {
+        const name = resolvedSelectOutputName(statement)
+        if (name !== undefined) aggregateOutputs.add(name)
+      }
+    })
+  }
+  if (query.where !== undefined) {
+    visitSelectExpression(query.where, {
+      select: (statement, context) => {
+        if (typeof statement.aggregate === 'string') throw inputError(`${context.path}: aggregates cannot be used in where conditions.`)
+      },
+      field: (field, context) => {
+        if (aggregateOutputs.has(field)) throw inputError(`${context.path}: aggregate output ${field} cannot be used in where conditions.`)
+      }
+    }, { root: 'condition', path: 'where' })
+  }
+}
+
 export function validateDataQuery (query: Record<string, unknown>): void {
   rejectUnknownKeys(query, rootKeys, 'Query')
   validateField(query.from, 'Query field "from"')
@@ -707,11 +748,11 @@ export function validateDataQuery (query: Record<string, unknown>): void {
     })
     validateFunnelHashConditions(query)
   }
-  if (query.limit !== undefined && (!Number.isInteger(query.limit) || Number(query.limit) < 1)) {
-    throw inputError('Query limit must be a positive integer.')
+  if (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || Number(query.limit) < 1)) {
+    throw inputError('Query limit must be a positive integer no greater than Number.MAX_SAFE_INTEGER (9007199254740991).')
   }
-  if (query.offset !== undefined && (!Number.isInteger(query.offset) || Number(query.offset) < 0)) {
-    throw inputError('Query offset must be a non-negative integer.')
+  if (query.offset !== undefined && (!Number.isSafeInteger(query.offset) || Number(query.offset) < 0)) {
+    throw inputError('Query offset must be a non-negative integer no greater than Number.MAX_SAFE_INTEGER (9007199254740991).')
   }
   if (query.group !== undefined) {
     if (!Array.isArray(query.group)) throw inputError('Query group must be an array of field names.')
@@ -741,4 +782,5 @@ export function validateDataQuery (query: Record<string, unknown>): void {
       }
     }
   }
+  validateAggregatePlacement(query)
 }

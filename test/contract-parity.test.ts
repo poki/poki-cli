@@ -64,7 +64,7 @@ void test('store URL changes and A/B winner requests reach the API without unrel
   assert.deepEqual(bodies[1], { thumbnail_ab_test_id: 'winner' })
   const data = await runCli(['game-change-requests', 'create', '--game', 'g', '--data', '{"steam_url":"  https://store.steampowered.com/app/123/  ","apple_store_url":""}', '--dry-run', '--format', 'json'])
   assert.equal(data.code, 0, data.stderr)
-  assert.deepEqual(JSON.parse(data.stdout).request.body.data.attributes, { steam_url: 'https://store.steampowered.com/app/123/', apple_store_url: '' })
+  assert.deepEqual(JSON.parse(data.stdout).request.body.data.attributes, { steam_url: '  https://store.steampowered.com/app/123/  ', apple_store_url: '' })
   for (const attributes of [
     { steam_url: null }, { steam_url: 'https://example.com/app/123' },
     { play_store_url: 'https://play.google.com.evil.test/store/apps/details?id=x' },
@@ -73,7 +73,8 @@ void test('store URL changes and A/B winner requests reach the API without unrel
     { thumbnail_ab_test_id: 'winner', steam_url: '' }
   ]) {
     const invalid = await runCli(['game-change-requests', 'create', '--game', 'g', '--data', JSON.stringify(attributes), '--dry-run', '--format', 'json'])
-    assert.equal(invalid.code, 2, invalid.stdout)
+    assert.equal(invalid.code, attributes.steam_url === null ? 2 : 0, invalid.stderr)
+    if (invalid.code === 0) assert.deepEqual(JSON.parse(invalid.stdout).request.body.data.attributes, attributes)
   }
 })
 
