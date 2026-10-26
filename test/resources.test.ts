@@ -1328,8 +1328,10 @@ void test('mutation text limits accept Unicode boundaries and reject oversized f
   const build = join(directory, 'build')
   mkdirSync(build)
   writeFileSync(join(build, 'index.html'), '<!doctype html>')
-  const notes = '😀'.repeat(16383) + 'abc'
-  const oversizedNotes = '😀'.repeat(16384)
+  // Three-byte BMP characters reach the UTF-8 limit while leaving room for
+  // the other arguments within Windows' 32,767 UTF-16 command-line limit.
+  const notes = '€'.repeat(21845)
+  const oversizedNotes = notes + 'a'
   const cases = [
     { command: ['versions', 'update', 'v'], flag: '--label', field: 'label', valid: 'é'.repeat(128), invalid: 'é'.repeat(129), limit: '256 UTF-8 bytes' },
     {
