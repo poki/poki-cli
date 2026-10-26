@@ -80,7 +80,11 @@ export function gameReadiness (
   const activationPossibleCandidates = !canEditTracks && canActivateApproved
     ? doneVersionIDs.filter(id => !activationCandidates.includes(id))
     : []
-  const activationBlockers: ReadinessBlocker[] = []
+  const moderationRequirement = 'For an unapproved developer-owned game, content_moderation_status must be pass.'
+  const moderationBlockers: ReadinessBlocker[] = game.approved === true || game.content_moderation_status === 'pass'
+    ? []
+    : [{ code: 'CONTENT_MODERATION_REQUIRED', message: 'The unapproved game has not passed content moderation. Pending, fail, defer, and missing status block this operation.' }]
+  const activationBlockers: ReadinessBlocker[] = [...moderationBlockers]
   const releaseStatus = isRecord(game.content_metadata) ? game.content_metadata.release_status : undefined
   if (game.approved !== true && !['no-link-release', '10k-test', '10k-test-with-content-restrictions'].includes(String(releaseStatus))) {
     activationBlockers.push({ code: 'GAME_NOT_APPROVED_FOR_ACTIVATION', message: 'The game must be approved or in a no-link-release, 10k-test, or 10k-test-with-content-restrictions release before activating versions.' })
@@ -103,7 +107,7 @@ export function gameReadiness (
   // so their absence can never prove that the backend has no active request.
   const activeRequestVisibilityComplete = false
   const playtestCandidates = versionIDs.filter(id => !visibleActiveRequestVersions.has(id))
-  const playtestBlockers: ReadinessBlocker[] = []
+  const playtestBlockers: ReadinessBlocker[] = [...moderationBlockers]
   if (game.archived === true) playtestBlockers.push({ code: 'GAME_ARCHIVED', message: 'Unarchive the game before requesting Playtests.' })
   if (!canCreatePlaytest) playtestBlockers.push({ code: 'PLAYTEST_PERMISSION_NOT_GRANTED', message: 'The current account lacks scoped playtest edit permission for this game.' })
   if (versionIDs.length === 0) playtestBlockers.push({ code: 'NO_VERSION', message: 'A Playtest request must reference a version belonging to the game.' })
@@ -115,7 +119,7 @@ export function gameReadiness (
     : []
 
   const canCreatePlayerFit = hasOwnedPermission('can_edit_owned_player_fit_tests')
-  const playerFitBlockers: ReadinessBlocker[] = []
+  const playerFitBlockers: ReadinessBlocker[] = [...moderationBlockers]
   if (game.archived === true) playerFitBlockers.push({ code: 'GAME_ARCHIVED', message: 'Unarchive the game before starting Player Fit.' })
   if (!canCreatePlayerFit) playerFitBlockers.push({ code: 'PLAYER_FIT_PERMISSION_NOT_GRANTED', message: 'The current account lacks scoped Player Fit edit permission for this game.' })
   if (versionIDs.length === 0) playerFitBlockers.push({ code: 'NO_VERSION', message: 'A Player Fit test must reference a version belonging to the game.' })
@@ -125,6 +129,8 @@ export function gameReadiness (
     id: idOf(game) ?? '',
     game: {
       title: game.title ?? null,
+      approved: game.approved === true,
+      content_moderation_status: game.content_moderation_status ?? null,
       team_id: gameTeamID ?? null,
       owned_by_current_account: ownsGame,
       track_count: tracks.length,
@@ -132,6 +138,7 @@ export function gameReadiness (
     },
     operations: {
       versions_activate: operationReadiness(activationCandidates, activationBlockers, [
+        moderationRequirement,
         'The game is approved or in a supported test release (no-link-release, 10k-test, or 10k-test-with-content-restrictions).',
         'At most one existing traffic track.',
         'The selected version belongs to this game and has state done.',
@@ -142,12 +149,14 @@ export function gameReadiness (
         ...(activationPossibleCandidates.length === 0 ? {} : { possible_candidate_version_ids: activationPossibleCandidates })
       }),
       playtest_requests_create: operationReadiness(playtestCandidates, playtestBlockers, [
+        moderationRequirement,
         'The game is not archived.',
         'The selected version belongs to this game.',
         'No active Playtest request exists for the selected version.',
         'Scoped playtest edit permission.'
       ], playtestBackendChecks, { command: 'poki playtest-requests create --version VERSION_ID', active_request_visibility_complete: activeRequestVisibilityComplete, visible_active_request_version_ids: [...visibleActiveRequestVersions] }),
       player_fit_tests_create: operationReadiness(versionIDs, playerFitBlockers, [
+        moderationRequirement,
         'The game is not archived.',
         'The selected version belongs to this game.',
         'Scoped Player Fit edit permission.'

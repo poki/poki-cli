@@ -270,3 +270,39 @@ void test('games readiness reports only visible backend mutation conditions and 
   assert.doesNotMatch(result.stdout, /inspector|thumbnail|credits/i)
   assert.equal(document.meta.backend_authoritative, true)
 })
+
+void test('readiness requires moderation pass only for unapproved games', () => {
+  const user = { id: 'user-1', team_id: 'team-1' }
+  const permissions = ['can_edit_owned_game_tracks', 'can_edit_owned_playtests', 'can_edit_owned_player_fit_tests']
+  for (const approved of [false, true]) {
+    for (const status of [undefined, null, 'pending', 'fail', 'defer', 'pass']) {
+      const result = gameReadiness({
+        id: 'game-1',
+        team_id: 'team-1',
+        approved,
+        content_moderation_status: status,
+        content_metadata: { release_status: '10k-test' },
+        versions: [{ id: 'version-1', state: 'done' }]
+      }, user, permissions) as { operations: Record<string, { status: string, blockers: Array<{ code: string }> }> }
+      for (const operation of Object.values(result.operations)) {
+        const blocked = !approved && status !== 'pass'
+        assert.equal(operation.blockers.some(blocker => blocker.code === 'CONTENT_MODERATION_REQUIRED'), blocked, `${String(approved)}/${String(status)}`)
+        assert.equal(operation.status === 'blocked', blocked)
+      }
+    }
+  }
+})
+
+void test('readiness rejects an unreadable moderation status', async t => {
+  const { env } = await apiHarness(t, (req, res) => {
+    jsonApi(res, req.url === '/users/@me'
+      ? readinessUser
+      : {
+          data: { type: 'games', id: 'game-1', attributes: { approved: false, content_moderation_status: { invalid: true } } }
+        })
+  }, 'readiness-moderation')
+  const result = await runCli(['games', 'readiness', 'game-1', '--format', 'json'], { env })
+  assert.equal(result.code, 5, result.stderr)
+  assert.match(result.stderr, /INVALID_API_RESPONSE/)
+  assert.match(result.stderr, /games.content_moderation_status/)
+})

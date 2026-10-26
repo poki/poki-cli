@@ -97,7 +97,7 @@ void test('recording lists expose lifecycle and only add playable URLs to comple
 })
 
 void test('readiness matches backend game approval, release, and archive restrictions', () => {
-  const base = { id: 'g', team_id: 't', versions: [{ id: 'v', state: 'done' }] }
+  const base = { id: 'g', team_id: 't', content_moderation_status: 'pass', versions: [{ id: 'v', state: 'done' }] }
   const user = { id: 'u', team_id: 't' }
   const permissions = ['can_edit_owned_game_tracks', 'can_edit_owned_playtests', 'can_edit_owned_player_fit_tests']
   for (const release of ['not-released', 'live-test', 'no-link-release', '10k-test', '10k-test-with-content-restrictions']) {

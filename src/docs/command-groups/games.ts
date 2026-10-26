@@ -24,6 +24,7 @@ export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDis
     scope: 'project game_id, positional game ID, or --game',
     behavior: [
       'Uses the current game, current user, and meta.permissions to report candidates and blockers for versions activate, playtest-requests create, and player-fit-tests create.',
+      'Unapproved developer-owned games require content_moderation_status pass for all three operations; pending, fail, defer, and absent status are blockers. Approved games are exempt.',
       'Only CLI-required inputs and backend-enforced conditions represented by those responses are applied. Dashboard-only eligibility is intentionally excluded.',
       'Each operation status is ready, blocked, or backend_check_required. ready is true, false, or null respectively; backend_checks explains any state the responses cannot prove.',
       'The report is point-in-time and advisory: hidden active requests or complete review history may not be visible, and the backend rechecks every mutation.'
@@ -45,6 +46,7 @@ export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDis
       arguments: [argument('game-id', 'Game ID; defaults to project game_id.', false)],
       options: [option('--game', 'string', 'Game ID; alternative to the positional game-id.'), ...gameFieldOptions, dataOption, ...mutationOptions],
       behavior: [
+        'Unapproved games must pass content moderation before game edits, including selected-field edits.',
         'Title, thumbnail, and store URLs are changed through game-change-requests create.',
         'Archive state is shared; favorites belong only to the current user. Use --no-archived or --no-favorite to reverse either setting. Archiving is blocked while Web Fit is requested or running.',
         '--engine sends only annotations.engine in the PATCH; the server preserves every other annotation key.',

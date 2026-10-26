@@ -21,6 +21,7 @@ import {
   developerPermissionRequirements
 } from '../developer-permissions'
 import { AUTH_LOGIN_USER_ACTION_HINT, AUTH_REQUIRED_HINT } from '../errors'
+import { addCategoryCommandSpecs } from './command-groups/categories'
 import { addAudienceCommandSpecs } from './command-groups/audiences'
 import { addLimitCommandSpecs } from './command-groups/limits'
 import { addAuthCommandSpecs } from './command-groups/auth'
@@ -196,7 +197,7 @@ const bundledProvenance = {
 
 const specs: CommandSpec[] = []
 
-const CATEGORY_NAME_DISCOVERY = 'Discover category names with poki audiences list; numeric IDs are only for Playtest and Player Fit targeting.'
+const CATEGORY_NAME_DISCOVERY = 'Discover current category titles with poki categories list; numeric IDs are only for Playtest and Player Fit targeting.'
 const TESTING_AUDIENCE_DISCOVERY = 'Discover targetable bundled IDs with poki audiences list --testing-only.'
 // Shared by the commands that emulate a singular GET over a filtered
 // collection request.
@@ -376,6 +377,7 @@ addLimitCommandSpecs(commandSpecBuilder)
 addABTestCommandSpecs(commandSpecBuilder)
 addWebFitTestCommandSpecs(commandSpecBuilder)
 addAudienceCommandSpecs(commandSpecBuilder)
+addCategoryCommandSpecs(commandSpecBuilder)
 
 addGameCommandSpecs(commandSpecBuilder)
 
@@ -720,6 +722,7 @@ export function shapesDocument (): Record<string, unknown> {
       codes: 'permission_codes document the developer-scoped permission relevant to the command; permission_requirements pairs each code with its description. Every API action with documented permissions exposes its requirement in permission_logic, including conditional and AND/OR requirements; permission_guidance explains how to check effective grants without treating them as proof of access. Only HTTP 403 together with JSON:API code permission-denied becomes PERMISSION_DENIED; the same backend code on another status keeps a generic HTTP classification.',
       empty: 'An empty permission_codes list means the command checks no named permission (ownership rules still apply server-side).',
       discovery: 'poki help permissions describes every CLI code. poki whoami returns the effective subset granted to the current credentials; --raw preserves the unfiltered backend response.',
+      content_moderation: 'Restricted game-scoped permissions require content_moderation_status pass for unapproved games. Game reads/deletion, version reads/creation/edits, and review reads are exempt; activation is restricted. Approved games and admin/read-only-admin roles bypass this gate. Other permissions still apply.',
       enforcement: 'The backend remains authoritative because ownership, team flags, resource state, and developer-support custom grants cannot be proven from a role label or local preflight.'
     },
     error_envelope: {
@@ -733,6 +736,7 @@ export function shapesDocument (): Record<string, unknown> {
         'INCOMPATIBLE_GRAIN (exit 2): an analytics aggregate violates a field contract or drops required dimensions; details.violations lists every expression path and safe reformulations, no API request is sent, and no override exists.',
         `AUTH_REQUIRED (exit 3): ${AUTH_REQUIRED_HINT}`,
         'PERMISSION_DENIED (exit 4, status 403): the backend explicitly identified an ACL failure; details includes the command’s documented permission requirements and an allowlisted API error summary containing only status, code, title, and detail.',
+        'CONTENT_MODERATION_REQUIRED (exit 4, status 403, not retryable): a restricted operation was rejected because an unapproved game has not passed moderation. Read content_moderation_status with poki games get GAME_ID; wait or address review feedback before retrying. Ordinary uploads remain available.',
         'NOT_FOUND (exit 4): the resource does not exist in the scanned scope.',
         'ACTIVE_VERSION_MULTIPLE_TRACKS (exit 4, status 409): versions activate found more than one existing traffic track during its GET preflight and sent no PATCH.',
         'WAIT_TIMEOUT (exit 5, retryable): --wait exceeded --wait-timeout-ms; details holds the last observed state and resource, and the operation continues server-side.',
@@ -789,7 +793,7 @@ export function workflowsDocument (): Record<string, unknown> {
       version_id: 'poki versions list.',
       event_keys: "Query dbt_p4d_game_events_funnel_v2.event and pass each value verbatim to --event. Communicate keys in frontend terms as Category^What^Action; the analytics model builds that order from backend fields category^action^label. The empty frontend Action form still ends in '^'.",
       funnel_hashes: 'Query dbt_p4d_game_events_funnel_v2.event_hash through toString, or through groupUniqArray(toString(event_hash)) for distinct values. Reuse the emitted decimal strings verbatim in ["prefix_hashes", "has_any_int64", ["..."]]; signed 64-bit hashes can exceed JavaScript safe-integer precision, so never parse or write them as numbers.',
-      category_names: 'For games suggested-category, use name values from poki audiences list.',
+      category_names: 'For games suggested-category, use title values from poki categories list.',
       category_ids: 'For Playtest and Player Fit targeting, use numeric IDs from poki audiences list --testing-only.'
     },
     reporting: {

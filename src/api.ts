@@ -91,13 +91,15 @@ export function apiResponseError (status: number, body: unknown, headers: Header
     retryable: transient && retrySafe,
     requestId: headers.get('x-request-id') ?? headers.get('x-cloud-trace-context') ?? undefined,
     retryAfter: headers.get('retry-after') ?? undefined,
-    ...(status === 400 && firstErrorCode === 'invalid-lobby-filter' && /^\/games\/[^/]+\/netlib\/lobbies$/.test(request.path)
-      ? { hint: 'Correct the --filter values before retrying. Run `poki netlib-lobbies fields` for field types: counts need integers, public/has_password need booleans, timestamps need valid dates, and custom_data needs valid JSON.' }
-      : status === 401 && !payloadValidationFailed
-        ? { hint: AUTH_REQUIRED_HINT }
-        : (transient || redirect) && !retrySafe
-            ? { hint: `The ${method} outcome may be unknown. Read the resource state before deciding whether to retry this mutation.` }
-            : {})
+    ...(status === 403 && firstErrorCode === 'content-moderation-required'
+      ? { hint: 'This operation requires content moderation to pass for an unapproved game. Inspect content_moderation_status with `poki games get GAME_ID`. Pending, fail, defer, and missing status block restricted operations. Wait for moderation or address the review feedback before retrying; ordinary version uploads remain available.' }
+      : status === 400 && firstErrorCode === 'invalid-lobby-filter' && /^\/games\/[^/]+\/netlib\/lobbies$/.test(request.path)
+        ? { hint: 'Correct the --filter values before retrying. Run `poki netlib-lobbies fields` for field types: counts need integers, public/has_password need booleans, timestamps need valid dates, and custom_data needs valid JSON.' }
+        : status === 401 && !payloadValidationFailed
+          ? { hint: AUTH_REQUIRED_HINT }
+          : (transient || redirect) && !retrySafe
+              ? { hint: `The ${method} outcome may be unknown. Read the resource state before deciding whether to retry this mutation.` }
+              : {})
   })
 }
 

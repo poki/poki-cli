@@ -73,7 +73,7 @@ function validateGameMutationData (data: Record<string, unknown>): void {
 // hidden by a resource collapsed to its identity, is unknown: reporting it as
 // `blocked` would state a condition the CLI never observed.
 const readinessStateFields: Readonly<Record<string, readonly string[]>> = {
-  games: ['approved', 'archived', 'content_metadata', 'team_id', 'team', 'uploader_id', 'uploader', 'tracks', 'versions', 'playtest_requests'],
+  games: ['approved', 'content_moderation_status', 'archived', 'content_metadata', 'team_id', 'team', 'uploader_id', 'uploader', 'tracks', 'versions', 'playtest_requests'],
   users: ['team_id', 'team'],
   game_versions: ['state', 'cached_latest_review_status'],
   playtest_requests: ['version_id', 'version']
@@ -142,7 +142,7 @@ function withGameFieldOptions (yargs: Argv): Argv {
       type: 'string'
     })
     .option('suggested-category', {
-      describe: 'Suggested Poki content-category name; combined comma-separated value at most 65535 UTF-8 bytes; repeat for multiple names (use audiences list to discover names)',
+      describe: 'Suggested Poki content-category name; combined comma-separated value at most 65535 UTF-8 bytes; repeat for multiple names (use categories list to discover titles)',
       type: 'array',
       string: true
     })
@@ -216,7 +216,7 @@ export function registerGameCommands (yargs: Argv, api: ApiClient): Argv {
           point_in_time: true,
           backend_authoritative: true,
           limitations: [
-            'The backend rechecks permissions, review history, version ownership, active requests, and version state when a mutation is sent.',
+            'The backend rechecks permissions, content moderation, review history, version ownership, active requests, and version state when a mutation is sent.',
             'Hidden active Playtest requests and complete review history may not be represented in the game response.'
           ],
           requests: [`GET /games/${gameID}`, 'GET /users/@me']

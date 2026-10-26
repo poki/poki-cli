@@ -328,3 +328,29 @@ void test('a poll bounded by the request timeout keeps the created-version recov
   assert.deepEqual(error.details.recovery.resume_poll.arguments.slice(0, 4), ['versions', 'get', 'V', '--wait'])
   assert.ok(polls >= 1)
 })
+
+void test('content moderation denials retain their own code and recovery without retries or permission misclassification', async t => {
+  let requests = 0
+  const { env } = await apiHarness(t, (req, res) => {
+    requests++
+    req.resume()
+    jsonApi(res, { errors: [{ status: '403', code: 'content-moderation-required', detail: 'game has not passed content moderation' }] }, 403)
+  }, 'moderation-required')
+  for (const command of [
+    ['playtest-requests', 'create', '--game', 'g', '--version', 'v'],
+    ['player-fit-tests', 'list', '--game', 'g'],
+    ['games', 'update', 'g', '--engine', 'unity']
+  ]) {
+    const result = await runCli([...command, '--format', 'json'], { env })
+    assert.equal(result.code, 4, result.stderr)
+    const { error } = JSON.parse(result.stderr)
+    assert.equal(error.code, 'CONTENT_MODERATION_REQUIRED')
+    assert.equal(error.status, 403)
+    assert.equal(error.retryable, false)
+    assert.match(error.hint, /poki games get GAME_ID/)
+    assert.match(error.hint, /ordinary version uploads remain available/)
+    assert.equal(error.details.permission_codes, undefined)
+    assert.equal(result.stdout, '')
+  }
+  assert.equal(requests, 3)
+})

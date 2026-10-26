@@ -62,7 +62,7 @@ export function addWebFitTestCommandSpecs ({ apiAction, gameOption, group, optio
     options: [gameOption, option('--version', 'string', 'Version ID to test.', { required: true }), option('--golden-ticket', 'boolean', 'Use the team golden ticket; backend eligibility and cooldown apply.', { default: false }), ...requestMutationOptions],
     risk: 'destructive',
     destructive: true,
-    behavior: ['Sends plain JSON with version_id and golden_ticket. The backend returns an empty success response; normalized output reports requested: true, not test completion.', 'Requires --yes; --dry-run is offline. The backend checks ownership, archived state, an existing Web Fit request, quotas, and golden-ticket cooldown.'],
+    behavior: ['Sends plain JSON with version_id and golden_ticket. The backend returns an empty success response; normalized output reports requested: true, not test completion.', 'Requires --yes; --dry-run is offline. The backend checks ownership, content moderation (pass required for unapproved games), archived state, an existing Web Fit request, quotas, and golden-ticket cooldown.'],
     side_effects: ['Changes game testing state, replaces all tracks with the selected version at 100% public traffic, and notifies the Poki team. May consume a golden ticket.']
   })
 }

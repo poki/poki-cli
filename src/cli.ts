@@ -5,6 +5,7 @@ import yargs, { Argv } from 'yargs'
 
 import { ApiClient } from './api'
 import { registerAuthCommands } from './commands/auth'
+import { registerCategoryCommands } from './commands/categories'
 import { registerAudienceCommands } from './commands/audiences'
 import { registerDataCommands } from './commands/data'
 import { registerLimitCommands } from './commands/limits'
@@ -289,6 +290,7 @@ export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
   cli = registerLegacyCommands(cli)
   cli = registerAuthCommands(cli)
   cli = registerAudienceCommands(cli)
+  cli = registerCategoryCommands(cli, api)
   cli = registerDiscoveryCommands(cli, api)
   cli = registerLimitCommands(cli, api)
   cli = registerABTestCommands(cli, api)
