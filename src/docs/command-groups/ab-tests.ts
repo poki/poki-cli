@@ -33,7 +33,7 @@ export function addABTestCommandSpecs ({ apiAction, argument, dataOption, exampl
         behavior: [
           'Field flags and --data are mutually exclusive. Unknown and immutable fields are rejected locally.',
           'Creation makes a draft; starting is a separate operation. Names and descriptions may be edited later, but the backend restricts target changes to drafts.',
-          thumbnail ? 'Variant A is the current game thumbnail. Default targets are 1000 clicks or 100000 views. Image contents and game eligibility are validated by the backend. Dry-run omits encoded image data.' : 'Default target is 2000 gameplays per variant. Variant IDs and device are immutable; variant descriptions may only be changed in draft status.',
+          thumbnail ? 'Variant A is the current game thumbnail. Default targets are 1000 clicks or 100000 views. Image contents and game eligibility are validated by the backend. Dry-run omits encoded image data.' : 'Default target is 2000 gameplays per variant. Variant IDs and device are immutable; variant descriptions may only be changed in draft status. Both versions need an approved review unless the caller is an admin or the game team has can_use_unreviewed_versions_in_ab_tests; the backend checks this on creation and start.',
           'A failed or malformed mutation response can have an uncertain outcome. Inspect existing tests before retrying creation.'
         ],
         examples: [example(thumbnail ? `poki ${command} create --name "New thumbnail" --description "Compare artwork" --thumbnail-file thumbnail.png --dry-run` : `poki ${command} create --name "New tutorial" --version-a VERSION_A --version-b VERSION_B --dry-run`, 'Preview creating a draft experiment.')]
@@ -48,7 +48,7 @@ export function addABTestCommandSpecs ({ apiAction, argument, dataOption, exampl
         risk: 'destructive',
         destructive: true,
         side_effects: [effect],
-        behavior: ['Requires --yes for execution; --dry-run performs no network requests. Backend lifecycle and permission checks remain authoritative.'],
+        behavior: ['Requires --yes for execution; --dry-run performs no network requests. Backend lifecycle and permission checks remain authoritative.', ...(!thumbnail && action === 'start' ? ['Both versions need an approved review unless the caller is an admin or the game team has can_use_unreviewed_versions_in_ab_tests. Eligibility is checked again when starting a draft.'] : [])],
         examples: [example(`poki ${command} ${action} TEST_ID --yes`, effect)]
       })
     }
