@@ -199,9 +199,10 @@ export async function getResource (
   path: string,
   args: Record<string, unknown>,
   expected?: ExpectedJsonApiResource,
-  description = 'resource read'
+  description = 'resource read',
+  signal?: AbortSignal
 ): Promise<unknown> {
-  const response = await api.request({ path, timeoutMs: requestTimeout(args) })
+  const response = await api.request({ path, timeoutMs: requestTimeout(args), signal })
   if (args.raw === true) return response.body
   return expected === undefined
     ? normalizeJsonApiResource(response.body)

@@ -20,7 +20,7 @@ import {
   withOutputOptions, withRequestOptions, withTimeoutOption, withUploadOutputOptions,
   withWaitMeta, withWaitOptions, writeDownload
 } from './common'
-import { pollArguments } from './async-create'
+import { pollArguments } from './recovery'
 import { registerResourceDiscovery } from './resource-docs'
 
 const collectionPath = (game: unknown): string => gamePath(game, 'marketing_assets')
@@ -56,8 +56,8 @@ function assetsDocument (body: unknown, game: string, uploadType?: string): Reso
   return { ...result, data: normalized }
 }
 
-async function readAssets (api: ApiClient, argv: Record<string, unknown>): Promise<{ body: unknown, result: ReturnType<typeof assetsDocument> }> {
-  const response = await api.request({ path: collectionPath(argv.game), timeoutMs: requestTimeout(argv) })
+async function readAssets (api: ApiClient, argv: Record<string, unknown>, signal?: AbortSignal): Promise<{ body: unknown, result: ReturnType<typeof assetsDocument> }> {
+  const response = await api.request({ path: collectionPath(argv.game), timeoutMs: requestTimeout(argv), signal })
   return { body: response.body, result: assetsDocument(response.body, String(argv.game)) }
 }
 
@@ -70,8 +70,8 @@ function selectedAssets (result: ReturnType<typeof assetsDocument>, ids: string[
 }
 
 async function waitForAssets (api: ApiClient, argv: Record<string, unknown>, ids: string[], singular: boolean, observed?: (assets: Array<Record<string, unknown>>) => void): Promise<unknown> {
-  const outcome = await pollUntil(argv, async timeoutMs => {
-    const { result } = await readAssets(api, { ...argv, timeoutMs })
+  const outcome = await pollUntil(argv, async (timeoutMs, signal) => {
+    const { result } = await readAssets(api, { ...argv, timeoutMs }, signal)
     const assets = selectedAssets(result, ids)
     if (assets.some(asset => !['uploading', 'ready', 'error'].includes(String(asset.status)))) {
       throw invalidResponse('invalid_processing_status')
@@ -85,14 +85,18 @@ async function waitForAssets (api: ApiClient, argv: Record<string, unknown>, ids
       terminal: failed || ready,
       succeeded: ready
     }
-  }, 'Media Kit assets', requestTimeout(argv) ?? api.timeoutMs)
+  }, 'Media Kit assets', requestTimeout(argv) ?? api.timeoutMs, resumeAssetPolls(argv, ids))
   return withWaitMeta(outcome)
+}
+
+function resumeAssetPolls (argv: Record<string, unknown>, ids: string[]): Array<{ command: string, arguments: string[] }> {
+  return ids.map(id => ({ command: 'poki', arguments: ['media-kit', 'get', id, '--game', String(argv.game), '--wait', ...pollArguments(argv)] }))
 }
 
 function recovery (argv: Record<string, unknown>, ids: string[]): Record<string, unknown> {
   return {
     inspect: { command: 'poki', arguments: ['media-kit', 'list', '--game', String(argv.game), '--full'] },
-    resume_poll: ids.map(id => ({ command: 'poki', arguments: ['media-kit', 'get', id, '--game', String(argv.game), '--wait', ...pollArguments(argv)] }))
+    resume_poll: resumeAssetPolls(argv, ids)
   }
 }
 

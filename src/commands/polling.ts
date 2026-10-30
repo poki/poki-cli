@@ -1,6 +1,8 @@
 import type { Argv } from 'yargs'
 
 import { CliError, inputError } from '../errors'
+import { isRecord } from '../json'
+import { RecoveryAction } from './recovery'
 import {
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_WAIT_TIMEOUT_MS,
@@ -13,7 +15,7 @@ export function withWaitOptions (yargs: Argv, waitDescription: string): Argv {
   return yargs
     .option('wait', { describe: waitDescription, type: 'boolean', default: false })
     .option('poll-interval-ms', { describe: `Delay between --wait polls; accepts an ${TIMEOUT_MILLISECONDS_RANGE}`, type: 'number', default: DEFAULT_POLL_INTERVAL_MS })
-    .option('wait-timeout-ms', { describe: `Maximum total --wait time before a retryable WAIT_TIMEOUT error; accepts an ${TIMEOUT_MILLISECONDS_RANGE}`, type: 'number', default: DEFAULT_WAIT_TIMEOUT_MS })
+    .option('wait-timeout-ms', { describe: `Maximum total --wait time; read timeouts are retryable, while post-create timeouts preserve creation recovery; accepts an ${TIMEOUT_MILLISECONDS_RANGE}`, type: 'number', default: DEFAULT_WAIT_TIMEOUT_MS })
     .check(argv => {
       if (parseTimeoutMilliseconds(argv.pollIntervalMs) === undefined) throw inputError(`--poll-interval-ms must be a positive integer no greater than ${String(MAX_TIMEOUT_MS)}.`)
       if (parseTimeoutMilliseconds(argv.waitTimeoutMs) === undefined) throw inputError(`--wait-timeout-ms must be a positive integer no greater than ${String(MAX_TIMEOUT_MS)}.`)
@@ -34,13 +36,14 @@ export interface PollOutcome {
 // carries the last observed state.
 export async function pollUntil (
   args: Record<string, unknown>,
-  fetchState: (pollTimeoutMs: number) => Promise<{ resource: unknown, state: string, terminal: boolean, succeeded: boolean }>,
+  fetchState: (pollTimeoutMs: number, signal: AbortSignal) => Promise<{ resource: unknown, state: string, terminal: boolean, succeeded: boolean }>,
   subject: string,
   // The timeout one poll request would use outside --wait: the explicit
   // --timeout-ms, else POKI_API_TIMEOUT_MS, else the ordinary default. Each
   // poll is bounded by this or the remaining wait time, whichever is smaller,
   // and which of the two bounds applies decides how an expiry is reported.
-  requestTimeoutMs: number
+  requestTimeoutMs: number,
+  resumePoll?: RecoveryAction | RecoveryAction[]
 ): Promise<PollOutcome> {
   const intervalMs = parseTimeoutMilliseconds(args.pollIntervalMs) ?? DEFAULT_POLL_INTERVAL_MS
   const timeoutMs = parseTimeoutMilliseconds(args.waitTimeoutMs) ?? DEFAULT_WAIT_TIMEOUT_MS
@@ -50,10 +53,20 @@ export async function pollUntil (
   let lastResource: unknown = null
   let lastState = 'unknown'
 
+  const recovery = resumePoll === undefined
+    ? {}
+    : {
+        recovery: {
+          resume_poll: Array.isArray(resumePoll)
+            ? resumePoll.map(action => ({ ...action, command: 'poki' }))
+            : { ...resumePoll, command: 'poki' }
+        }
+      }
+
   const timeoutError = (): CliError => {
     const waitedMs = Date.now() - startedAt
     return new CliError('WAIT_TIMEOUT', `Timed out waiting for ${subject} after ${String(waitedMs)} ms; last observed state: ${lastState}.`, 5, {
-      details: { last_state: lastState, polls, waited_ms: waitedMs, resource: lastResource },
+      details: { last_state: lastState, polls, waited_ms: waitedMs, resource: lastResource, ...recovery },
       retryable: true,
       hint: 'The operation continues server-side; poll the resource again or raise --wait-timeout-ms.'
     })
@@ -74,19 +87,25 @@ export async function pollUntil (
     // request timeout bounds keeps reporting API_TIMEOUT, so a create that
     // already committed keeps its no-replay recovery envelope.
     const boundedByDeadline = remainingBeforePoll <= requestTimeoutMs
-    const deadlineReached = Symbol('poll-deadline-reached')
+    const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     let current: { resource: unknown, state: string, terminal: boolean, succeeded: boolean }
     try {
       current = await Promise.race([
-        fetchState(pollTimeoutMs),
-        new Promise<typeof deadlineReached>(resolve => {
-          timer = setTimeout(() => resolve(deadlineReached), remainingBeforePoll)
+        fetchState(pollTimeoutMs, controller.signal),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => {
+            const error = boundedByDeadline
+              ? timeoutError()
+              : new CliError('API_TIMEOUT', `The polling request exceeded ${String(pollTimeoutMs)} ms.`, 5, {
+                retryable: true,
+                details: { timeout_ms: pollTimeoutMs }
+              })
+            controller.abort(error)
+            reject(error)
+          }, pollTimeoutMs)
         })
-      ]).then(result => {
-        if (result === deadlineReached) throw timeoutError()
-        return result
-      })
+      ])
     } catch (error) {
       // Only an expiry becomes WAIT_TIMEOUT. A definitive failure such as a 403
       // that happens to surface once the deadline has passed is not a timeout,
@@ -94,9 +113,16 @@ export async function pollUntil (
       // into a retry loop against a request that can never succeed.
       const expiredPoll = error instanceof CliError && (error.code === 'WAIT_TIMEOUT' || (boundedByDeadline && error.code === 'API_TIMEOUT'))
       if (expiredPoll) throw timeoutError()
+      if (error instanceof CliError && error.retryable && resumePoll !== undefined) {
+        throw new CliError(error.code, error.message, error.exitCode, {
+          ...error,
+          details: { ...(isRecord(error.details) ? error.details : {}), ...recovery }
+        })
+      }
       throw error
     } finally {
       if (timer !== undefined) clearTimeout(timer)
+      controller.abort()
     }
     if (Date.now() >= deadline) throw timeoutError()
     polls++

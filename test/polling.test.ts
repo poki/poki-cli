@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { createServer } from 'node:http'
+
+import { ApiClient } from '../src/api'
+import { refreshStoredAuth } from '../src/auth'
+import { listen } from './helpers'
 
 import { pollUntil } from '../src/commands/common'
 import { CliError } from '../src/errors'
@@ -114,4 +119,82 @@ void test('a definitive poll failure observed after the deadline keeps its own c
     assert.equal(error.retryable, false)
     return true
   })
+})
+
+void test('polling aborts a stalled GET at its deadline', async () => {
+  let aborted = false
+  await assert.rejects(pollUntil({ waitTimeoutMs: 30 }, async (_timeout, signal) => {
+    return await new Promise<never>((resolve, reject) => {
+      signal.addEventListener('abort', () => {
+        aborted = true
+        reject(signal.reason)
+      }, { once: true })
+    })
+  }, 'stalled GET', 30000), (error: unknown) => {
+    assert.ok(error instanceof CliError)
+    assert.equal(error.code, 'WAIT_TIMEOUT')
+    assert.equal(aborted, true)
+    return true
+  })
+})
+
+void test('polling cancels authentication refresh and never replays its GET after the deadline', async t => {
+  let requests = 0
+  let refreshStarted: () => void = () => {}
+  const started = new Promise<void>(resolve => { refreshStarted = resolve })
+  let refreshClosed: () => void = () => {}
+  const closed = new Promise<void>(resolve => { refreshClosed = resolve })
+  const server = createServer((req, res) => {
+    req.resume()
+    req.on('end', () => {
+      refreshStarted()
+      res.on('close', refreshClosed)
+      // Deliberately leave refresh without headers or body until cancelled.
+    })
+  })
+  const url = await listen(t, server)
+  t.after(() => server.closeAllConnections())
+  const api = new ApiClient('https://api.example.invalid', {
+    readAuth: () => ({ access_token: 'stale', refresh_token: 'refresh' }),
+    refreshAuth: async (config, signal) => await refreshStoredAuth(config, url, signal),
+    fetch: async () => {
+      requests++
+      return new Response('{}', { status: 401 })
+    }
+  })
+  // Start polling only after the test's server is listening. Leave ample time
+  // for the refresh to reach it before the deadline under concurrent tests.
+  const polling = pollUntil({ waitTimeoutMs: 500 }, async (timeoutMs, signal) => {
+    await api.request({ path: '/versions/V', timeoutMs, signal })
+    return { resource: {}, state: 'done', terminal: true, succeeded: true }
+  }, 'refreshing operation', 30000)
+  const failure = assert.rejects(polling, (error: unknown) => {
+    assert.ok(error instanceof CliError)
+    assert.equal(error.code, 'WAIT_TIMEOUT')
+    return true
+  })
+  await started
+  await failure
+  await closed
+  assert.equal(requests, 1)
+})
+
+void test('a refresh dependency that ignores cancellation cannot replay a GET', async () => {
+  let finishRefresh: (config: { access_token: string }) => void = () => {}
+  let requests = 0
+  const api = new ApiClient('https://api.example.invalid', {
+    readAuth: () => ({ access_token: 'stale', refresh_token: 'refresh' }),
+    refreshAuth: async () => await new Promise(resolve => { finishRefresh = resolve }),
+    fetch: async () => {
+      requests++
+      return new Response('{}', { status: 401 })
+    }
+  })
+  await assert.rejects(pollUntil({ waitTimeoutMs: 30 }, async (timeoutMs, signal) => {
+    await api.request({ path: '/versions/V', timeoutMs, signal })
+    return { resource: {}, state: 'done', terminal: true, succeeded: true }
+  }, 'late refresh', 30000), (error: unknown) => error instanceof CliError && error.code === 'WAIT_TIMEOUT')
+  finishRefresh({ access_token: 'fresh' })
+  await wait(10)
+  assert.equal(requests, 1)
 })

@@ -294,7 +294,14 @@ void test('Media Kit wait failures preserve accepted IDs and read-only recovery 
   mode = 'error'
   assert.equal(errorOf(await runCli(scoped('get', 'a', '--wait'), { env })).code, 'ASYNC_OPERATION_FAILED')
   mode = 'uploading'
-  assert.equal(errorOf(await runCli(scoped('get', 'a', '--wait', '--wait-timeout-ms', '60'), { env })).code, 'WAIT_TIMEOUT')
+  const timeout = errorOf(await runCli(scoped('get', 'a', '--wait', '--wait-timeout-ms', '250'), { env }))
+  assert.equal(timeout.code, 'WAIT_TIMEOUT')
+  assert.equal(timeout.retryable, true)
+  assert.equal(timeout.details.recovery.resume_poll[0].command, 'poki')
+  mode = 'ready'
+  const resumed = await runCli([...timeout.details.recovery.resume_poll[0].arguments, '--format', 'json'], { env })
+  assert.equal(resumed.code, 0, resumed.stderr)
+  assert.equal(JSON.parse(resumed.stdout).data.status, 'ready')
 })
 
 void test('Media Kit malformed successful uploads are non-retryable even in raw mode', async t => {

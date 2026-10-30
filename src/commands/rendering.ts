@@ -21,8 +21,9 @@ export function renderList (
     const meta = isRecord(viewed) ? viewed.meta : undefined
     // A bounded --all reports truncated; an ordinary numbered page reports only
     // has_next. Both mean resources are missing, and the CSV rows carry neither
-    // signal, so an incomplete export must fail closed either way.
-    if (isRecord(meta) && (meta.truncated === true || meta.has_next === true)) {
+    // signal. A final numbered page can also omit all earlier pages.
+    if ((typeof args.page === 'number' && args.page > 1) ||
+      (isRecord(meta) && (meta.truncated === true || meta.has_next === true))) {
       throw inputError('--format csv cannot represent pagination truncation metadata, so this incomplete result cannot be exported. Rerun as JSON or TOON to read the pagination metadata, or use --all with bounds that return a complete result.', {
         pagination: meta
       })

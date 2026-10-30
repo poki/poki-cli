@@ -19,6 +19,7 @@ export function runProcess (args: string[], api?: ApiClient): void {
   // CLI is still writing. The consumer going away is not a CLI failure, so end
   // quietly instead of letting EPIPE surface as an uncaught stream error.
   process.stdout.on('error', error => {
+    runInterruptCleanups()
     if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0)
     reportFatal(error)
     process.exit(5)

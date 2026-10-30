@@ -20,6 +20,7 @@ export interface ApiRequest {
   responseType?: ResponseType
   rawBody?: BodyInit
   timeoutMs?: number
+  signal?: AbortSignal
   // Marks a non-GET request whose failure is safe to retry (the read-only
   // analytics and realtime POSTs); timeout and network errors key retryable off this
   // in addition to the HTTP method.
@@ -36,7 +37,7 @@ export interface ApiClientDependencies {
   realtimeUrl: string
   fetch: typeof globalThis.fetch
   readAuth: () => Config | undefined
-  refreshAuth: (config: Config) => Promise<Config>
+  refreshAuth: (config: Config, signal?: AbortSignal) => Promise<Config>
   beforeFirstRequest: () => Promise<void>
 }
 
@@ -108,7 +109,7 @@ export class ApiClient {
   private readonly realtimeUrl: string
   private readonly transport: typeof globalThis.fetch
   private readonly readAuth: () => Config | undefined
-  private readonly refreshAuth: (config: Config) => Promise<Config>
+  private readonly refreshAuth: (config: Config, signal?: AbortSignal) => Promise<Config>
   private inMemoryAuth: Config | undefined
   private beforeFirstRequest: (() => Promise<void>) | undefined
   private firstRequestPreparation: Promise<void> | undefined
@@ -124,7 +125,7 @@ export class ApiClient {
     this.realtimeUrl = (dependencies.realtimeUrl ?? serviceEnvironment().realtimeUrl).replace(/\/$/, '')
     this.transport = dependencies.fetch ?? globalThis.fetch
     this.readAuth = dependencies.readAuth ?? readStoredAuth
-    this.refreshAuth = dependencies.refreshAuth ?? refreshStoredAuth
+    this.refreshAuth = dependencies.refreshAuth ?? (async (config, signal) => await refreshStoredAuth(config, undefined, signal))
     this.beforeFirstRequest = dependencies.beforeFirstRequest
     this.timeoutMs = timeoutMillisecondsOrDefault(process.env.POKI_API_TIMEOUT_MS, DEFAULT_REQUEST_TIMEOUT_MS)
     // Multipart build and asset uploads legitimately take longer than API
@@ -147,6 +148,7 @@ export class ApiClient {
   }
 
   async request<T = unknown> (request: ApiRequest): Promise<ApiResponse<T>> {
+    request.signal?.throwIfAborted()
     const config = this.inMemoryAuth ?? decodeBearerCredentials(this.readAuth())
     if (config?.access_token === undefined) {
       throw authRequired()
@@ -159,17 +161,19 @@ export class ApiClient {
     if (response.status === 401 && safeApiErrorResponse(response.body).errors?.[0]?.code !== 'payload-validation-failed') {
       if (config.refresh_token !== undefined) {
         try {
-          const refreshed = decodeBearerCredentials(await this.refreshAuth(config))
+          const refreshed = decodeBearerCredentials(await this.refreshAuth(config, request.signal))
           if (refreshed?.access_token === undefined) {
             throw authRequired('Authentication expired and could not be refreshed.')
           }
           // Keep a successfully refreshed token usable for every later request
           // in this invocation even when the credential file cannot be updated.
+          request.signal?.throwIfAborted()
           this.inMemoryAuth = refreshed
           // A 401 rejection happens before the server executes the request,
           // so replaying a mutation once after a refresh cannot double-apply.
           response = await this.execute<T>(request, refreshed.access_token)
         } catch (error) {
+          request.signal?.throwIfAborted()
           if (error instanceof CliError) throw error
           throw authRequired('Authentication expired and could not be refreshed.')
         }
@@ -308,6 +312,7 @@ export class ApiClient {
       await this.firstRequestPreparation
     }
 
+    request.signal?.throwIfAborted()
     const timeoutMs = request.timeoutMs ?? (request.rawBody !== undefined ? this.uploadTimeoutMs : this.timeoutMs)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -324,10 +329,11 @@ export class ApiClient {
         // request() instead so mutations retain inspect-before-replay recovery.
         // Signed downloads intentionally keep their separate redirect behavior.
         redirect: 'manual',
-        signal: controller.signal
+        signal: request.signal === undefined ? controller.signal : AbortSignal.any([controller.signal, request.signal])
       })
 
       const text = await response.text()
+      request.signal?.throwIfAborted()
       let parsed: unknown = text
       const wantsJson = request.responseType !== 'text'
       if (wantsJson && text !== '') {
@@ -356,6 +362,7 @@ export class ApiClient {
         body: parsed as T
       }
     } catch (error) {
+      request.signal?.throwIfAborted()
       if (error instanceof CliError) throw error
       if (controller.signal.aborted) {
         throw new CliError('API_TIMEOUT', `The Poki API request exceeded ${timeoutMs} ms.`, 5, {

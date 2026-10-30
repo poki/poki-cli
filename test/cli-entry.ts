@@ -7,7 +7,7 @@ const apiUrl = process.env.POKI_CLI_TEST_API_URL ?? unreachable
 const authUrl = process.env.POKI_CLI_TEST_AUTH_URL ?? unreachable
 const api = new ApiClient(apiUrl, {
   realtimeUrl: process.env.POKI_CLI_TEST_REALTIME_URL ?? unreachable,
-  refreshAuth: async config => await refreshStoredAuth(config, authUrl)
+  refreshAuth: async (config, signal) => await refreshStoredAuth(config, authUrl, signal)
 })
 
 runProcess(process.argv.slice(2), api)

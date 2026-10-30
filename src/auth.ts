@@ -233,8 +233,10 @@ async function postAuth (
   path: string,
   body: Record<string, string>,
   operation: 'exchange' | 'refresh',
-  authUrl: string
+  authUrl: string,
+  signal?: AbortSignal
 ): Promise<Config> {
+  signal?.throwIfAborted()
   const timeoutMs = authTimeoutMs()
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -246,9 +248,10 @@ async function postAuth (
         headers: { 'Content-Type': 'application/json', 'User-Agent': CLI_USER_AGENT },
         body: JSON.stringify(body),
         redirect: 'manual',
-        signal: controller.signal
+        signal: signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal])
       })
     } catch (error) {
+      signal?.throwIfAborted()
       if (error instanceof AuthRequestError) throw error
       if (controller.signal.aborted) {
         throw new AuthRequestError(`The authentication ${operation} request exceeded ${String(timeoutMs)} ms.`)
@@ -265,6 +268,7 @@ async function postAuth (
     try {
       data = await boundedResponseText(response, operation)
     } catch (error) {
+      signal?.throwIfAborted()
       if (error instanceof AuthRequestError) throw error
       if (controller.signal.aborted) {
         throw new AuthRequestError(`The authentication ${operation} request exceeded ${String(timeoutMs)} ms.`)
@@ -277,6 +281,7 @@ async function postAuth (
     } catch {
       throw new AuthRequestError(`The authentication ${operation} returned invalid JSON.`)
     }
+    signal?.throwIfAborted()
     const credentials = decodeBearerCredentials(parsed)
     if (credentials === undefined) {
       throw new AuthRequestError(`The authentication ${operation} returned invalid credentials.`)
@@ -292,13 +297,13 @@ async function postAuth (
   }
 }
 
-export async function refreshStoredAuth (config: Config, authUrl = serviceEnvironment().authUrl): Promise<Config> {
+export async function refreshStoredAuth (config: Config, authUrl = serviceEnvironment().authUrl, signal?: AbortSignal): Promise<Config> {
   const current = decodeCredentials(config, { requireAccessToken: false, allowUploadToken: false })
   if (current?.refresh_token === undefined) {
     throw new Error('No refresh token found')
   }
 
-  const body = await postAuth('/auth/refresh', { refresh_token: current.refresh_token }, 'refresh', authUrl)
+  const body = await postAuth('/auth/refresh', { refresh_token: current.refresh_token }, 'refresh', authUrl, signal)
   const refreshed = decodeBearerCredentials({ ...current, ...body })
   if (refreshed === undefined) throw new AuthRequestError('The authentication refresh returned invalid credentials.')
   try {

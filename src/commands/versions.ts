@@ -15,7 +15,8 @@ import { getProjectGameId, readProjectConfig } from '../project'
 import { DEFAULT_DOWNLOAD_TIMEOUT_MS } from '../timeouts'
 import { appendUploadFile } from '../uploads'
 import { createZip } from '../zipfile'
-import { AsyncCreateContract, createThenWait, pollArguments } from './async-create'
+import { AsyncCreateContract, createThenWait } from './async-create'
+import { pollArguments } from './recovery'
 import { registerResourceDiscovery } from './resource-docs'
 import {
   gamePath,
@@ -204,19 +205,20 @@ function versionStateOf (resource: unknown): string {
 }
 
 async function waitForVersion (api: ApiClient, versionId: string, argv: Record<string, unknown>): Promise<PollOutcome> {
-  return await pollUntil(argv, async timeoutMs => {
+  return await pollUntil(argv, async (timeoutMs, signal) => {
     const resource = await getResource(
       api,
       `/versions/${encodeURIComponent(versionId)}`,
       { ...argv, raw: false, timeoutMs },
       { type: 'game_versions', id: versionId },
-      'version poll'
+      'version poll',
+      signal
     )
     const state = versionStateOf(resource)
     return { resource, state, terminal: state === 'done' || state === 'error', succeeded: state === 'done' }
     // A version poll is an ordinary GET, so it uses the ordinary request
     // timeout even when the upload itself used the multipart one.
-  }, `version ${versionId} processing`, requestTimeout(argv) ?? api.timeoutMs)
+  }, `version ${versionId} processing`, requestTimeout(argv) ?? api.timeoutMs, uploadWaitContract.resumePoll(versionId, argv))
 }
 
 // Version uploads predate the JSON:API resource surface and the deployed API

@@ -59,6 +59,7 @@ void test('versions get --wait reports WAIT_TIMEOUT when the state never becomes
   assert.equal(error.details.last_state, 'processing')
   assert.equal(error.details.resource.data.state, 'processing')
   assert.equal(typeof error.hint, 'string')
+  assert.deepEqual(error.details.recovery.resume_poll.arguments.slice(0, 4), ['versions', 'get', 'V', '--wait'])
   assert.ok(requests >= 1)
 
   // --wait --raw is rejected locally before any request is made.
@@ -363,4 +364,84 @@ void test('player-feedback-questions create preserves the created question when 
   assert.equal(JSON.parse(resumed.stdout).data.status, 'completed')
   assert.equal(creates, 1)
   assert.equal(polls, 2)
+})
+
+void test('post-create wait timeouts retain identity and executable recovery without repeating creation', async t => {
+  let ready = false
+  let creates = 0
+  const { directory, env } = await apiHarness(t, (req, res) => {
+    const version = req.url?.includes('versions') === true
+    if (req.method === 'POST') {
+      creates++
+      req.resume()
+      req.on('end', () => {
+        if (version) {
+          res.writeHead(201, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ id: 'V', game_id: 'g', state: 'processing' }))
+        } else {
+          jsonApi(res, { data: { type: 'player_feedback_questions', id: 'Q', attributes: { status: 'pending' } } }, 201)
+        }
+      })
+      return
+    }
+    if (!ready) return // The first polling GET never answers.
+    jsonApi(res, {
+      data: version
+        ? { type: 'game_versions', id: 'V', attributes: { state: 'done' } }
+        : { type: 'player_feedback_questions', id: 'Q', attributes: { status: 'completed' } }
+    })
+  }, 'create-timeout-recovery')
+  const build = join(directory, 'build')
+  mkdirSync(build)
+  writeFileSync(join(build, 'index.html'), '<!doctype html>')
+
+  const cases = [
+    { args: ['versions', 'upload', '--game', 'g', '--build-dir', build], noun: 'version', id: 'V', code: 'VERSION_UPLOAD_WAIT_FAILED' },
+    { args: ['player-feedback-questions', 'create', '--game', 'g', '--question', 'Why?', '--start-date', '2026-07-01', '--end-date', '2026-07-31', '--message-type', 'bugreport'], noun: 'question', id: 'Q', code: 'PLAYER_FEEDBACK_QUESTION_CREATE_WAIT_FAILED' }
+  ]
+  for (const [index, entry] of cases.entries()) {
+    ready = false
+    const result = await runCli([...entry.args, '--wait', '--poll-interval-ms', '10', '--wait-timeout-ms', '250', '--timeout-ms', '3000', '--format', 'json'], { env })
+    assert.equal(result.code, 5, result.stderr)
+    const error = JSON.parse(result.stderr).error
+    assert.equal(error.code, entry.code)
+    assert.equal(error.retryable, false)
+    assert.equal(error.details[`created_${entry.noun}_id`], entry.id)
+    assert.equal(error.details[`created_${entry.noun}`].id, entry.id)
+    assert.equal(error.details.cause.code, 'WAIT_TIMEOUT')
+    assert.equal(error.details.recovery.resume_poll.command, 'poki')
+    assert.ok(error.details.recovery.resume_poll.arguments.includes('--timeout-ms'))
+    ready = true
+    const resumed = await runCli(error.details.recovery.resume_poll.arguments, { env })
+    assert.equal(resumed.code, 0, resumed.stderr)
+    assert.equal(JSON.parse(resumed.stdout).data.id, entry.id)
+    assert.equal(creates, index + 1)
+  }
+})
+
+void test('retryable standalone polling failures include an executable resume command', async t => {
+  let ready = false
+  const { env } = await apiHarness(t, (req, res) => {
+    if (!ready) {
+      jsonApi(res, { errors: [{ code: 'unavailable', title: 'Try later' }] }, 503)
+      return
+    }
+    const version = req.url === '/versions/V'
+    jsonApi(res, {
+      data: version
+        ? { type: 'game_versions', id: 'V', attributes: { state: 'done' } }
+        : { type: 'player_feedback_questions', id: 'Q', attributes: { status: 'completed' } }
+    })
+  }, 'read-resume')
+  for (const args of [['versions', 'get', 'V'], ['player-feedback-questions', 'get', 'Q', '--game', 'g']]) {
+    ready = false
+    const failed = await runCli([...args, '--wait', '--format', 'json'], { env })
+    const error = JSON.parse(failed.stderr).error
+    assert.equal(error.retryable, true)
+    assert.equal(error.code, 'UNAVAILABLE')
+    assert.equal(error.details.recovery.resume_poll.command, 'poki')
+    ready = true
+    const resumed = await runCli(error.details.recovery.resume_poll.arguments, { env })
+    assert.equal(resumed.code, 0, resumed.stderr)
+  }
 })

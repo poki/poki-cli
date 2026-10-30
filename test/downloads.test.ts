@@ -114,11 +114,7 @@ function completeBody (text: string): ReadableStream<Uint8Array> {
   })
 }
 
-// exFAT and FAT volumes, and parts of some network and container mounts, do not
-// implement hard links, so the publication primitive is simply unavailable
-// there. It used to surface as "Could not write '<destination>'" for a
-// destination that was perfectly writable, which made the download impossible
-// rather than merely unverified.
+// Simulate filesystems where atomic publication through hard links is absent.
 function linkUnavailable (code: string): typeof link {
   return (async () => {
     const error: NodeJS.ErrnoException = new Error(`hard links are unavailable (${code})`)
@@ -127,20 +123,24 @@ function linkUnavailable (code: string): typeof link {
   }) as typeof link
 }
 
-void test('a download publishes on filesystems without hard links', async t => {
+void test('downloads fail closed on filesystems without hard links', async t => {
   for (const code of ['EPERM', 'ENOSYS', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EMLINK']) {
     const directory = temporaryDirectory(t, `no-hardlink-${code}`)
     const destination = join(directory, 'version.zip')
 
-    const bytes = await writeDownload(destination, completeBody('complete-archive'), false, linkUnavailable(code))
-
-    assert.equal(bytes, Buffer.byteLength('complete-archive'), code)
-    assert.equal(readFileSync(destination, 'utf8'), 'complete-archive', code)
+    await assert.rejects(writeDownload(destination, completeBody('archive'), false, linkUnavailable(code)), (error: unknown) => {
+      assert.ok(error instanceof CliError)
+      assert.equal(error.code, 'INVALID_INPUT')
+      assert.match(error.message, /Cannot safely publish/)
+      assert.match(error.message, /--force/)
+      return true
+    })
+    assert.equal(existsSync(destination), false, code)
     assert.deepEqual(temporaryDownloads(directory), [], code)
   }
 })
 
-void test('the no-hard-link fallback still refuses an existing destination without --force', async t => {
+void test('unsupported hard links leave an existing destination intact without --force', async t => {
   const directory = temporaryDirectory(t, 'no-hardlink-existing')
   const destination = join(directory, 'version.zip')
   writeFileSync(destination, 'original-bytes')
@@ -158,49 +158,20 @@ void test('the no-hard-link fallback still refuses an existing destination witho
   assert.deepEqual(temporaryDownloads(directory), [])
 })
 
-// The exclusive create is the same atomic test-and-set the hard link performed,
-// so losing the race still has to mean losing it completely.
-void test('concurrent no-hard-link publications never replace the winning destination', async t => {
+void test('unsupported publication never overwrites or cleans up another destination', async t => {
   const directory = temporaryDirectory(t, 'no-hardlink-race')
   const destination = join(directory, 'version.zip')
-  const attempts = 8
-  let ready = 0
-  let release: (() => void) | undefined
-  const released = new Promise<void>(resolve => { release = resolve })
-  let allReady: (() => void) | undefined
-  const readyToPublish = new Promise<void>(resolve => { allReady = resolve })
-
-  const writes = Array.from({ length: attempts }, async (_, index) => {
-    let sent = false
-    const body = new ReadableStream<Uint8Array>({
-      async pull (controller) {
-        if (!sent) {
-          sent = true
-          controller.enqueue(new TextEncoder().encode(`complete-${String(index)}`))
-          return
-        }
-        ready++
-        if (ready === attempts) allReady?.()
-        await released
-        controller.close()
-      }
-    }, { highWaterMark: 0 })
-    return await writeDownload(destination, body, false, linkUnavailable('EPERM'))
-  })
-
-  await readyToPublish
-  release?.()
-  const results = await Promise.allSettled(writes)
-  const winners = results.flatMap((result, index) => result.status === 'fulfilled' ? [index] : [])
-  assert.equal(winners.length, 1)
-  assert.equal(readFileSync(destination, 'utf8'), `complete-${String(winners[0])}`)
-  for (const result of results) {
-    if (result.status === 'fulfilled') continue
-    assert.ok(result.reason instanceof CliError)
-    assert.equal(result.reason.code, 'INVALID_INPUT')
-    assert.match(result.reason.message, /--force/)
+  const competingLink: typeof link = async () => {
+    writeFileSync(destination, 'other-writer')
+    throw Object.assign(new Error('no hard links'), { code: 'ENOTSUP' })
   }
+  await assert.rejects(writeDownload(destination, completeBody('archive'), false, competingLink), /Cannot safely publish/)
+  assert.equal(readFileSync(destination, 'utf8'), 'other-writer')
   assert.deepEqual(temporaryDownloads(directory), [])
+
+  // --force explicitly permits replacing that destination without hard links.
+  await writeDownload(destination, completeBody('replacement'), true, linkUnavailable('ENOTSUP'))
+  assert.equal(readFileSync(destination, 'utf8'), 'replacement')
 })
 
 // Only errno values that mean "this filesystem has no hard links" select the

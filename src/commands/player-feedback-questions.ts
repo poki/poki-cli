@@ -7,7 +7,8 @@ import { jsonApiDocument } from '../jsonapi'
 import { isRecord } from '../json'
 import { listCapabilities } from '../list-capabilities'
 import { getProjectGameId } from '../project'
-import { AsyncCreateContract, createThenWait, pollArguments } from './async-create'
+import { AsyncCreateContract, createThenWait } from './async-create'
+import { pollArguments } from './recovery'
 import { registerResourceDiscovery } from './resource-docs'
 import {
   asStrings,
@@ -56,17 +57,18 @@ function questionStatusOf (resource: unknown): string {
 }
 
 async function waitForQuestion (api: ApiClient, game: unknown, questionId: string, argv: Record<string, unknown>): Promise<PollOutcome> {
-  return await pollUntil(argv, async timeoutMs => {
+  return await pollUntil(argv, async (timeoutMs, signal) => {
     const resource = await getResource(
       api,
       questionPath(game, questionId),
       { ...argv, raw: false, timeoutMs },
       { type: 'player_feedback_questions', id: questionId },
-      'player-feedback question poll'
+      'player-feedback question poll',
+      signal
     )
     const status = questionStatusOf(resource)
     return { resource, state: status, terminal: status === 'completed' || status === 'failed', succeeded: status === 'completed' }
-  }, `player feedback question ${questionId} generation`, requestTimeout(argv) ?? api.timeoutMs)
+  }, `player feedback question ${questionId} generation`, requestTimeout(argv) ?? api.timeoutMs, createWaitContract.resumePoll(questionId, argv))
 }
 
 const createWaitContract: AsyncCreateContract = {

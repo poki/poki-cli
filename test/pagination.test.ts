@@ -723,3 +723,17 @@ void test('list queries enforce endpoint fields and preserve supported filter gr
   assert.doesNotThrow(() => validateListQuery({ filter: ['code=abc', 'public=true'], sort: ['-peer_count'] }, listCapabilities.netlibLobbies))
   assert.doesNotThrow(() => validateListQuery({ filter: ['gameplay.device_category=mobile', 'status=completed'] }, listCapabilities.playerFitTests))
 })
+
+void test('CSV refuses a final numbered page even without a next page', async t => {
+  const { env } = await apiHarness(t, (_req, res) => {
+    jsonApi(res, { data: [{ type: 'games', id: 'last', attributes: { title: 'Last' } }] })
+  }, 'csv-final-page')
+  const args = ['games', 'list', '--page', '4']
+  const structured = await runCli([...args, '--format', 'json'], { env })
+  assert.equal(structured.code, 0, structured.stderr)
+  assert.equal(JSON.parse(structured.stdout).meta.has_next, false)
+  const csv = await runCli([...args, '--format', 'csv'], { env })
+  assert.equal(csv.code, 2)
+  assert.equal(csv.stdout, '')
+  assert.match(csv.stderr, /--all/)
+})

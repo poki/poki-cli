@@ -1,7 +1,7 @@
 import { CliError, safeErrorCause } from '../errors'
 import { ResourceResult } from '../jsonapi'
-import { DEFAULT_POLL_INTERVAL_MS, DEFAULT_WAIT_TIMEOUT_MS } from '../timeouts'
 import { PollOutcome, withWaitMeta } from './polling'
+import { RecoveryAction } from './recovery'
 import { render } from './rendering'
 import { isMalformedSuccessfulMutation } from './resource-responses'
 
@@ -10,11 +10,6 @@ import { isMalformedSuccessfulMutation } from './resource-responses'
 // observed it fails. Replaying the mutation would duplicate the resource, so
 // every such command reports the same non-retryable envelope carrying the
 // created resource and an executable inspect-or-resume recovery.
-
-export interface RecoveryAction {
-  action: string
-  arguments: string[]
-}
 
 export interface AsyncCreateContract {
   errorCode: string
@@ -25,14 +20,6 @@ export interface AsyncCreateContract {
   pollFailed: { message: string, hint: string }
   inspect: (argv: Record<string, unknown>) => RecoveryAction
   resumePoll: (createdId: string, argv: Record<string, unknown>) => RecoveryAction
-}
-
-// Resuming a poll repeats the caller's own pacing rather than the defaults.
-export function pollArguments (argv: Record<string, unknown>): string[] {
-  return [
-    '--poll-interval-ms', String(argv.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS),
-    '--wait-timeout-ms', String(argv.waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS)
-  ]
 }
 
 export function asyncCreateWaitFailure (
@@ -128,10 +115,9 @@ export async function createThenWait (options: AsyncCreateOptions): Promise<void
   try {
     outcome = await options.poll(createdId)
   } catch (error) {
-    // A remote operation that is still running or has genuinely failed keeps
-    // its own contract; only an unexplained polling failure needs the
-    // created-resource recovery envelope.
-    if (error instanceof CliError && (error.code === 'WAIT_TIMEOUT' || error.code === 'ASYNC_OPERATION_FAILED')) throw error
+    // Terminal failures carry the final resource. Every other polling failure,
+    // including a deadline, must preserve creation identity and prevent replay.
+    if (error instanceof CliError && error.code === 'ASYNC_OPERATION_FAILED') throw error
     throw failure(error, options.recoveryFromNormalized(normalized.data), createdId)
   }
   render(withWaitMeta(outcome), argv)

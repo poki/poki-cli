@@ -52,7 +52,7 @@ export function addMediaKitCommandSpecs ({ add, apiAction, argument, downloadReq
     risk: 'local_write',
     retry_safe: true,
     side_effects: ['Writes a local file; --force replaces an existing file after successful transfer.'],
-    behavior: ['Individual IDs download the original file; exact type and all targets download ready assets as a ZIP.', 'Requires an explicit output path. Downloads are streamed, temporary files are cleaned up on failure or interruption, and existing files remain intact until successful replacement.'],
+    behavior: ['Individual IDs download the original file; exact type and all targets download ready assets as a ZIP.', 'Requires an explicit output path. Downloads are streamed, temporary files are cleaned up on failure or interruption, and existing files remain intact until successful replacement.', 'Without --force, atomic publication requires hard-link support. Unsupported filesystems fail with INVALID_INPUT; choose another filesystem or explicitly allow replacement with --force.'],
     output: { shape: '{data: {game_id, target, path, filename, bytes}, meta: {}}' },
     examples: [example('poki media-kit download all --output ./media-kit.zip', 'Download all ready assets as a ZIP.')]
   })

@@ -16,13 +16,8 @@ async function downloadFileOperation<T> (destination: string, operation: () => P
   }
 }
 
-// exFAT and FAT volumes, and parts of some network and container mounts, do not
-// implement hard links at all. The publication below then fails for a reason
-// that has nothing to do with the destination, so these errno values select the
-// fallback rather than being reported as an unwritable path. EPERM is
-// deliberately included even though it is ambiguous: when the real cause is
-// permission, the fallback's own exclusive create fails the same way and that
-// failure is the one reported.
+// These filesystems cannot atomically publish a complete file without replacing
+// another writer's destination using the primitives exposed by Node.
 const hardLinkUnsupported = new Set(['EPERM', 'ENOSYS', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EMLINK'])
 
 function destinationExists (destination: string): CliError {
@@ -42,43 +37,11 @@ async function publishWithoutReplacing (
   // rename replaces a concurrently created destination on POSIX.
   try {
     await createLink(temporary, destination)
-    return
   } catch (error) {
     const code = (error as NodeJS.ErrnoException)?.code
     if (code === 'EEXIST') throw destinationExists(destination)
     if (code === undefined || !hardLinkUnsupported.has(code)) throw error
-  }
-
-  // Where hard links do not exist, an exclusive create is the same atomic
-  // test-and-set, so a destination that already exists or appears concurrently
-  // still loses the race and no caller's bytes are replaced. What it cannot
-  // reproduce is the hard link's other property: the destination is a zero-byte
-  // placeholder until the rename below replaces it, so a reader inside that
-  // window observes an empty file rather than no file. That is why this stays a
-  // fallback for filesystems that leave no alternative.
-  const placeholder = await open(destination, 'wx').catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException)?.code === 'EEXIST') throw destinationExists(destination)
-    throw error
-  })
-  await placeholder.close()
-
-  // A signal between the claim and the rename would otherwise leave that
-  // zero-byte placeholder behind, which is precisely the partial download the
-  // interrupt contract exists to remove.
-  const removePlaceholderOnInterrupt = registerInterruptCleanup(() => { rmSync(destination, { force: true }) })
-  try {
-    await rename(temporary, destination)
-  } catch (error) {
-    // The placeholder is ours and carries no data. Leaving it would turn a
-    // failed transfer into what looks like a completed empty download.
-    try {
-      await rm(destination, { force: true })
-    } catch {
-      // Preserve the rename failure, which explains why nothing was published.
-    }
-    throw error
-  } finally {
-    removePlaceholderOnInterrupt()
+    throw inputError(`Cannot safely publish '${destination}' without replacing files on this filesystem. Choose a filesystem supporting hard links, or pass --force to allow replacement.`, { output: destination })
   }
 }
 
