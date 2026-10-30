@@ -247,22 +247,11 @@ void test('stdout errors run registered cleanups before exiting', async t => {
   for (const code of ['EPIPE', 'EIO']) {
     const archive = join(directory, `${code}.zip`)
     writeFileSync(archive, 'temporary archive')
-    const preload = join(directory, `${code}.mjs`)
-    writeFileSync(preload, [
-      "import { createRequire } from 'node:module'",
-      "import { rmSync } from 'node:fs'",
-      `const { registerInterruptCleanup } = createRequire(import.meta.url)(${JSON.stringify(join(repository, 'src/errors.ts'))})`,
-      `registerInterruptCleanup(() => rmSync(${JSON.stringify(archive)}, { force: true }))`,
-      'let emitted = false',
-      'process.stdout.write = () => {',
-      '  if (!emitted) {',
-      '    emitted = true',
-      `    process.nextTick(() => process.stdout.emit('error', Object.assign(new Error('consumer closed'), { code: ${JSON.stringify(code)} })))`,
-      '  }',
-      '  return true',
-      '}'
-    ].join('\n'))
-    const result = await completion(spawnCli(['--version'], { preload }))
+    const preload = join(repository, 'test/fixtures/stdout-error.mjs')
+    const result = await completion(spawnCli(['--version'], {
+      preload,
+      env: { POKI_CLI_TEST_CLEANUP_ARCHIVE: archive, POKI_CLI_TEST_STDOUT_ERROR_CODE: code }
+    }))
     assert.equal(result.code, code === 'EPIPE' ? 0 : 5, result.stderr)
     assert.equal(existsSync(archive), false, `${code} must remove the archive`)
     if (code === 'EPIPE') assert.equal(result.stderr, '')
