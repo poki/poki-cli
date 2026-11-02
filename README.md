@@ -133,7 +133,7 @@ npm install --global --ignore-scripts --no-audit --no-fund @poki/cli@AVAILABLE_V
 npm install --save-dev --ignore-scripts --no-audit --no-fund @poki/cli@AVAILABLE_VERSION
 ```
 
-The LLM should choose the command matching the installation mode, verify it with `poki --version` or `npx @poki/cli@AVAILABLE_VERSION --version`, and must not replay the command that already completed. The advisory never self-updates the CLI, never blocks the completed command, and follows only npm's stable `latest` tag. Help, version, auth, offline commands, ordinary dry-runs, analytics validation, and the deprecated legacy upload path do not perform the update lookup. Set `POKI_CLI_UPDATE_CHECK=0` to opt out. Run `poki help updates` for the complete machine-readable contract.
+The LLM should choose the command matching the installation mode, verify it with `poki --version` or `npx @poki/cli@AVAILABLE_VERSION --version`, and must not replay the command that already completed. The advisory never self-updates the CLI, never blocks the completed command, and follows only npm's stable `latest` tag. Help, version, auth, offline commands, Inspector uploads, ordinary dry-runs, analytics validation, and the deprecated legacy upload path do not perform the update lookup. Set `POKI_CLI_UPDATE_CHECK=0` to opt out. Run `poki help updates` for the complete machine-readable contract.
 
 ## License
 

@@ -1,9 +1,10 @@
 import type { ApiClient } from './api'
+import type { InspectorClient } from './inspector'
 import { runCli } from './cli'
 import { CliError, interruptedError, runInterruptCleanups } from './errors'
 import { requestedFormat, writeError } from './output'
 
-export function runProcess (args: string[], api?: ApiClient): void {
+export function runProcess (args: string[], api?: ApiClient, inspector?: InspectorClient): void {
   // The process boundary owes an agent the same structured document every other
   // failure produces: printing the raw exception would leak an unsanitized stack
   // trace and leave the caller without a machine-readable code.
@@ -46,7 +47,7 @@ export function runProcess (args: string[], api?: ApiClient): void {
   process.on('SIGINT', handleInterrupt)
   process.on('SIGTERM', handleInterrupt)
 
-  runCli(args, api).then(exitCode => {
+  runCli(args, api, inspector).then(exitCode => {
     process.exitCode = exitCode
   }).catch(error => {
     reportFatal(error)

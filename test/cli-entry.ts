@@ -1,6 +1,7 @@
 import { ApiClient } from '../src/api'
 import { refreshStoredAuth } from '../src/auth'
 import { runProcess } from '../src/process'
+import { InspectorClient } from '../src/inspector'
 
 const unreachable = 'http://127.0.0.1:1'
 const apiUrl = process.env.POKI_CLI_TEST_API_URL ?? unreachable
@@ -10,4 +11,6 @@ const api = new ApiClient(apiUrl, {
   refreshAuth: async (config, signal) => await refreshStoredAuth(config, authUrl, signal)
 })
 
-runProcess(process.argv.slice(2), api)
+const inspector = new InspectorClient(process.env.POKI_CLI_TEST_INSPECTOR_URL ?? unreachable)
+
+runProcess(process.argv.slice(2), api, inspector)

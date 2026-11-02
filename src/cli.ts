@@ -22,6 +22,8 @@ import { registerReviewCommands } from './commands/reviews'
 import { registerRealtimeCommands } from './commands/realtime'
 import { registerVersionActivationCommands } from './commands/version-activations'
 import { registerVersionCommands } from './commands/versions'
+import { registerInspectorCommands } from './commands/inspector'
+import { InspectorClient } from './inspector'
 import { availableCommands, CommandSpec } from './docs/commands'
 import { developerPermissionRequirements } from './developer-permissions'
 import { CliError, safeApiErrorResponse } from './errors'
@@ -286,7 +288,7 @@ export function registerBuiltinCommands (cli: Argv, args: string[]): Argv {
     })
 }
 
-export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
+export function registerRootCommands (cli: Argv, api: ApiClient, inspector = new InspectorClient()): Argv {
   cli = registerLegacyCommands(cli)
   cli = registerAuthCommands(cli)
   cli = registerAudienceCommands(cli)
@@ -298,6 +300,7 @@ export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
   cli = registerMediaKitCommands(cli, api)
   cli = registerGameCommands(cli, api)
   cli = registerVersionCommands(cli, api)
+  cli = registerInspectorCommands(cli, inspector)
   cli = registerVersionActivationCommands(cli, api)
   cli = registerPlaytestCommands(cli, api)
   cli = registerPlaytestRequestCommands(cli, api)
@@ -311,7 +314,7 @@ export function registerRootCommands (cli: Argv, api: ApiClient): Argv {
   return registerDataCommands(cli, api)
 }
 
-export function buildCli (args: string[], api = new ApiClient()): Argv {
+export function buildCli (args: string[], api = new ApiClient(), inspector?: InspectorClient): Argv {
   let cli = registerBuiltinCommands(yargs(cliArguments(args))
     .scriptName('poki')
     .usage('$0 <command> [options]\n\nManage Poki for Developers resources and analytics with machine-readable API commands.')
@@ -321,7 +324,7 @@ export function buildCli (args: string[], api = new ApiClient()): Argv {
     // would leak unstructured plain-text usage with exit 0.
     .help(false), args)
 
-  cli = registerRootCommands(cli, api)
+  cli = registerRootCommands(cli, api, inspector)
 
   return cli
     .demandCommand(1, 'Choose a command. Run `poki help` to see all commands.')
@@ -354,7 +357,7 @@ export function buildCli (args: string[], api = new ApiClient()): Argv {
     })
 }
 
-export async function runCli (args: string[], api?: ApiClient): Promise<number> {
+export async function runCli (args: string[], api?: ApiClient, inspector?: InspectorClient): Promise<number> {
   const updates = new UpdateCoordinator(CLI_VERSION, requestedFormat(args))
   const client = api ?? new ApiClient()
   client.addBeforeFirstRequestHook(updates.beforeFirstRequest)
@@ -364,7 +367,7 @@ export async function runCli (args: string[], api?: ApiClient): Promise<number> 
       writeStructured(help.document, help.format)
       return 0
     }
-    await buildCli(args, client).parseAsync()
+    await buildCli(args, client, inspector).parseAsync()
     await updates.commandSucceeded()
     return 0
   } catch (error) {

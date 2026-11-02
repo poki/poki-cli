@@ -39,6 +39,7 @@ import { addReviewCommandSpecs } from './command-groups/reviews'
 import { addRealtimeCommandSpecs } from './command-groups/realtime'
 import { addVersionActivationCommandSpecs } from './command-groups/version-activations'
 import { addVersionCommandSpecs } from './command-groups/versions'
+import { addInspectorCommandSpecs } from './command-groups/inspector'
 import type { CommandSpecBuilder } from './command-groups/types'
 
 export interface HelpNotice {
@@ -182,7 +183,7 @@ const standardExitCodes = {
   0: 'success or help',
   2: 'invalid input or local validation failure',
   3: `authentication required or rejected; ${AUTH_LOGIN_USER_ACTION_HINT}`,
-  4: 'authenticated API request denied by permission or another client-visible rule, or resource not found',
+  4: 'API request denied by permission or another client-visible rule, or resource not found',
   5: 'network, timeout, server, or invalid API response failure',
   // 128 + SIGINT, the POSIX convention for a signal-terminated process.
   130: 'interrupted by SIGINT or SIGTERM before completion; reported as INTERRUPTED'
@@ -330,7 +331,7 @@ add({
   path: [],
   summary: 'Manage Poki resources and analytics.',
   behavior: [
-    'Use poki help --all for the compact manifest and poki help --search TEXT for discovery. Reference topics: poki help permissions, formats, shapes, workflows, and updates.',
+    'Discovery: poki help --all, poki help --search TEXT. Topics: poki help permissions, formats, shapes, workflows, updates.',
     'Game-scoped commands use project game_id or --game.',
     'Output defaults to TOON; --format json selects minified JSON. See poki help formats. JSON input is always accepted.',
     'API resource mutations support --dry-run, which proves local input validation only unless a command explicitly reports additional checks. Destructive and non-atomic operations require --yes. Analytics --validate-only likewise checks local structure without claiming deployed-API validity.',
@@ -382,6 +383,7 @@ addCategoryCommandSpecs(commandSpecBuilder)
 addGameCommandSpecs(commandSpecBuilder)
 
 addVersionCommandSpecs(commandSpecBuilder)
+addInspectorCommandSpecs(commandSpecBuilder)
 addVersionActivationCommandSpecs(commandSpecBuilder)
 
 addPlaytestRecordingCommandSpecs(commandSpecBuilder)
@@ -843,7 +845,7 @@ export function updatesDocument (): Record<string, unknown> {
       boundary: 'npm runs without a shell, with a 5-second timeout and bounded output. Lookup, timeout, parse, filesystem, and npm failures are silent and never affect the original command.',
       channel: 'Only the stable latest dist-tag is compared. Equal, older, invalid, and prerelease latest values produce no notice; installations opted into @experimental still refresh experiments manually.',
       eligible: 'Ordinary authenticated Poki API commands are eligible. The lookup finishes before their first real API request.',
-      excluded: 'Help, version, auth commands, legacy upload, context, bundled audiences, ordinary mutation --dry-run, and analytics --validate-only do not perform update network or state work. A dry-run explicitly documented as reading current API state is eligible.'
+      excluded: 'Help, version, auth commands, legacy upload, Inspector uploads, context, bundled audiences, ordinary mutation --dry-run, and analytics --validate-only do not perform update network or state work. A dry-run explicitly documented as reading current API state is eligible.'
     },
     state: {
       file: 'update-check.json in the same absolute Poki config directory as auth.json: below XDG_CONFIG_HOME/poki, LOCALAPPDATA/Poki, or the absolute home fallback.',
