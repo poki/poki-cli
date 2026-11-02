@@ -11,7 +11,7 @@ export function addLimitCommandSpecs ({ apiAction, example, group, option, outpu
       'Game reads return player_fit_game_limit/used, player_fit_team_limit/used, playtest_game_limit/used, playtest_team_limit/used, and webfit_limit/active. Team reads omit the game counters.',
       'used includes completed and reserved capacity. Remaining capacity is max(0, limit - used); for Web Fit subtract active from limit. resets_at is the next daily reset.',
       'Daily quotas reset at midnight UTC. Running/completed Player Fit tests and full active playtest recording targets count on the request day; closed playtests retain completed recordings after pending work settles. Web Fit has no timed reset.',
-      'Admins and verified teams are exempt from quotas. Historical recordings with unknown request targets are included in the usage estimate.',
+      'Admin and read-only-admin roles bypass quota checks. Unverified teams and teams with the limit_testing flag are subject to their configured Player Fit, Playtest, and Web Fit quotas; verified teams without the flag are exempt. Historical recordings with unknown request targets are included in the usage estimate.',
       'This is an advisory snapshot calculated from existing tests, requests, and recordings. Create requests recheck usage; simultaneous requests can exceed the allowance. TEST_QUOTA_EXCEEDED means the request was rejected; inspect details and do not automatically retry, split requests, or cancel work to regain quota.'
     ],
     examples: [example('poki limits get --format json', 'Read limits for the project game or current team.'), example('poki limits get --team TEAM_ID --format json', 'Read team-wide usage.')]
