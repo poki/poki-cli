@@ -247,6 +247,38 @@ void test('API 4xx, 5xx, and transport failures use their documented exit classe
     return true
   })
 
+  let cspRequests = 0
+  const cspRejected = clientFor((async () => {
+    cspRequests++
+    return new Response(JSON.stringify({
+      error: 'csp-meta-tag',
+      status: 400,
+      message: 'private backend text',
+      internal: { secret: 'legacy-shape-secret' }
+    }), { status: 400, headers: { 'Content-Type': 'application/json', 'X-Request-ID': 'csp-request' } })
+  }) as typeof fetch)
+  await assert.rejects(cspRejected.request({ method: 'POST', path: '/games/g/versions' }), (error: unknown) => {
+    assert.ok(error instanceof CliError)
+    assert.equal(error.code, 'CSP_META_TAG')
+    assert.equal(error.status, 400)
+    assert.equal(error.exitCode, 4)
+    assert.equal(error.retryable, false)
+    assert.equal(error.requestId, 'csp-request')
+    assert.match(error.message, /Remove.*meta tag from index\.html/)
+    assert.match(error.hint ?? '', /game-change-requests create --custom-content-security-policy/)
+    assert.doesNotMatch(JSON.stringify(errorDocument(error)), /private|legacy-shape-secret/)
+    return true
+  })
+  // The same legacy body on another operation must remain opaque.
+  await assert.rejects(cspRejected.request({ path: '/games/g/versions' }), (error: unknown) => {
+    assert.ok(error instanceof CliError)
+    assert.equal(error.code, 'HTTP_400')
+    assert.equal(error.details, undefined)
+    assert.doesNotMatch(JSON.stringify(errorDocument(error)), /private|legacy-shape-secret/)
+    return true
+  })
+  assert.equal(cspRequests, 2)
+
   const malformedClientError = clientFor((async () => new Response('not json', {
     status: 422,
     headers: { 'Content-Type': 'application/json' }

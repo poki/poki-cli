@@ -42,6 +42,17 @@ export interface ApiClientDependencies {
 }
 
 export function apiResponseError (status: number, body: unknown, headers: Headers, request: ApiRequest): CliError {
+  // Version uploads use the legacy error shape. Recognize this specific
+  // rejection without exposing arbitrary top-level backend messages.
+  if (status === 400 && request.method === 'POST' && /^\/games\/[^/]+\/versions$/.test(request.path) &&
+    isRecord(body) && body.error === 'csp-meta-tag' && !('errors' in body)) {
+    return new CliError('CSP_META_TAG', 'Remove the Content Security Policy meta tag from index.html before uploading.', 4, {
+      status,
+      retryable: false,
+      requestId: headers.get('x-request-id') ?? headers.get('x-cloud-trace-context') ?? undefined,
+      hint: 'Remove the <meta http-equiv="Content-Security-Policy"> tag from the build entrypoint and upload the corrected build. Request custom CSP changes with `poki game-change-requests create --custom-content-security-policy`.'
+    })
+  }
   if (status === 400 && request.method === 'POST' && /^\/games\/[^/]+\/marketing_assets\/[^/]+$/.test(request.path) &&
     isRecord(body) && Array.isArray(body.data) && body.data.length === 0 && !('errors' in body)) {
     const failed = mediaKitUploadFailures(body)
