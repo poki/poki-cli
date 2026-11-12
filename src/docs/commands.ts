@@ -843,7 +843,7 @@ export function updatesDocument (): Record<string, unknown> {
       cadence: 'Before the first eligible Poki API request, at most one registry lookup is attempted per rolling 24 hours for the shared user config directory. A failed attempt also starts the 24-hour suppression window.',
       registry_command: 'npm view @poki/cli "dist-tags.latest" --json',
       boundary: 'npm runs without a shell, with a 5-second timeout and bounded output. Lookup, timeout, parse, filesystem, and npm failures are silent and never affect the original command.',
-      channel: 'Only the stable latest dist-tag is compared. Equal, older, invalid, and prerelease latest values produce no notice; installations opted into @experimental still refresh experiments manually.',
+      channel: 'Only the stable latest dist-tag is compared. Equal, older, invalid, and prerelease latest values produce no notice.',
       eligible: 'Ordinary authenticated Poki API commands are eligible. The lookup finishes before their first real API request.',
       excluded: 'Help, version, auth commands, legacy upload, Inspector uploads, context, bundled audiences, ordinary mutation --dry-run, and analytics --validate-only do not perform update network or state work. A dry-run explicitly documented as reading current API state is eligible.'
     },
@@ -901,7 +901,7 @@ export const helpTopics: HelpTopic[] = [
   { name: 'permissions', summary: 'Developer permission codes, descriptions, command mappings, scope, and denial behavior.', keywords: ['permission', 'permissions', 'access', 'forbidden', 'denied', 'developer-support', 'ownership', 'scope', 'whoami'], document: permissionsDocument },
   { name: 'shapes', summary: 'Response envelopes, list views, pagination meta, dry-run documents, and the error contract.', keywords: ['output', 'shape', 'envelope', 'meta', 'pagination', 'has_next', 'view', 'error', 'stderr', 'exit code', 'retryable', 'retry_after', 'request_id', 'dry-run'], document: shapesDocument },
   { name: 'workflows', summary: 'End-to-end preview, release, polling, discovery, and reporting flows with rollback guidance.', keywords: ['workflow', 'preview', 'browser', 'play', 'release', 'publish', 'poll', 'polling', 'wait', 'rollback', 'review', 'activate', 'report', 'timezone', 'rate limit', 'team id', 'game id'], document: workflowsDocument },
-  { name: 'updates', summary: 'Stable daily update checks, shared state, stderr advisory shape, npm actions, and opt-out.', keywords: ['update', 'upgrade', 'npm', 'latest', 'experimental', 'dist-tag', 'stderr', 'POKI_CLI_UPDATE_CHECK'], document: updatesDocument }
+  { name: 'updates', summary: 'Stable daily update checks, shared state, stderr advisory shape, npm actions, and opt-out.', keywords: ['update', 'upgrade', 'npm', 'latest', 'dist-tag', 'stderr', 'POKI_CLI_UPDATE_CHECK'], document: updatesDocument }
 ]
 
 export function helpTopicDocument (name: string): Record<string, unknown> | undefined {

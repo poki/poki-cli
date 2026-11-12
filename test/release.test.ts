@@ -73,20 +73,20 @@ void test('prerelease publication requires one explicit npm-valid non-latest dis
   const probe = `
     import { validatePublishTag } from ${JSON.stringify(moduleUrl)}
     const cases = ${JSON.stringify([
-      ['0.2.0-experimental.0', [], false],
-      ['0.2.0-experimental.0', ['--tag', 'latest'], false],
-      ['0.2.0-experimental.0', ['--tag'], false],
-      ['0.2.0-experimental.0', ['--tag='], false],
-      ['0.2.0-experimental.0', ['--tag', 'experimental', '--tag', 'next'], false],
-      ['0.2.0-experimental.0', ['-t', 'experimental'], false],
-      ['0.2.0-experimental.0', ['--tag', 'v0.2.0-exp.0'], false],
-      ['0.2.0-experimental.0', ['--tag', 'x'], false],
-      ['0.2.0-experimental.0', ['--tag', 'experimental'], true],
-      ['0.2.0-experimental.0', ['--tag', 'exp-0.2.0'], true],
-      ['0.2.0-experimental.1', ['--tag=experimental'], true],
+      ['0.2.0-rc.0', [], false],
+      ['0.2.0-rc.0', ['--tag', 'latest'], false],
+      ['0.2.0-rc.0', ['--tag'], false],
+      ['0.2.0-rc.0', ['--tag='], false],
+      ['0.2.0-rc.0', ['--tag', 'rc', '--tag', 'next'], false],
+      ['0.2.0-rc.0', ['-t', 'rc'], false],
+      ['0.2.0-rc.0', ['--tag', 'v0.2.0-rc.0'], false],
+      ['0.2.0-rc.0', ['--tag', 'x'], false],
+      ['0.2.0-rc.0', ['--tag', 'rc'], true],
+      ['0.2.0-rc.0', ['--tag', 'rc-0.2.0'], true],
+      ['0.2.0-rc.1', ['--tag=rc'], true],
       ['0.2.0', [], true],
       ['0.2.0', ['--tag', 'latest'], true],
-      ['0.2.0', ['--tag', 'experimental'], true]
+      ['0.2.0', ['--tag', 'rc'], true]
     ])}
     const results = cases.map(([version, args, expected]) => {
       let accepted = true
@@ -114,14 +114,14 @@ void test('publication explicitly owns latest and dry-run instead of inheriting 
       resolveReleasePublishArguments('0.2.0', ['--dry-run']),
       resolveReleasePublishArguments('0.2.0', ['--dry-run=false']),
       resolveReleasePublishArguments('0.2.0', ['--tag', 'next']),
-      resolveReleasePublishArguments('0.2.0-experimental.0', ['--tag=experimental'])
+      resolveReleasePublishArguments('0.2.0-rc.0', ['--tag=rc'])
     ]
     process.stdout.write(JSON.stringify({ resolved, dryRuns: resolved.map(releasePublishIsDryRun) }))
   `
   const result = spawnSync(process.execPath, ['--input-type=module', '--eval', probe], {
     cwd: repository,
     encoding: 'utf8',
-    env: { ...process.env, NPM_CONFIG_DRY_RUN: 'true', NPM_CONFIG_TAG: 'experimental' }
+    env: { ...process.env, NPM_CONFIG_DRY_RUN: 'true', NPM_CONFIG_TAG: 'rc' }
   })
   assert.equal(result.status, 0, result.stderr)
   assert.deepEqual(JSON.parse(result.stdout), {
@@ -130,7 +130,7 @@ void test('publication explicitly owns latest and dry-run instead of inheriting 
       ['--dry-run', '--tag', 'latest'],
       ['--dry-run=false', '--tag', 'latest'],
       ['--tag', 'next', '--dry-run=false'],
-      ['--tag=experimental', '--dry-run=false']
+      ['--tag=rc', '--dry-run=false']
     ],
     dryRuns: [false, true, false, false, false]
   })
@@ -141,17 +141,17 @@ void test('release Git tagging preflights without mutation, then creates and pus
   const moduleUrl = pathToFileURL(join(repository, 'scripts', 'release-git-tag.mjs')).href
   const { prepareReleaseGitTag, publishReleaseGitTag } = await import(moduleUrl)
 
-  const plan = withoutAlternateGitIndex(() => prepareReleaseGitTag(worktree, '0.2.0-experimental.0'))
-  assert.equal(plan.tag, 'v0.2.0-experimental.0')
+  const plan = withoutAlternateGitIndex(() => prepareReleaseGitTag(worktree, '0.2.0-rc.0'))
+  assert.equal(plan.tag, 'v0.2.0-rc.0')
   assert.equal(plan.commit, commit)
   assert.equal(spawnSync('git', ['show-ref', '--verify', '--quiet', plan.reference], { cwd: worktree }).status, 1)
 
   withoutAlternateGitIndex(() => publishReleaseGitTag(plan))
   assert.equal(runGit(worktree, ['rev-parse', plan.reference]), commit)
   assert.equal(runGit(worktree, ['--git-dir', remote, 'rev-parse', plan.reference]), commit)
-  assert.throws(() => withoutAlternateGitIndex(() => prepareReleaseGitTag(worktree, '0.2.0-experimental.0')), /already exists locally/)
+  assert.throws(() => withoutAlternateGitIndex(() => prepareReleaseGitTag(worktree, '0.2.0-rc.0')), /already exists locally/)
   runGit(worktree, ['update-ref', '-d', plan.reference])
-  assert.throws(() => withoutAlternateGitIndex(() => prepareReleaseGitTag(worktree, '0.2.0-experimental.0')), /already exists on 'origin'/)
+  assert.throws(() => withoutAlternateGitIndex(() => prepareReleaseGitTag(worktree, '0.2.0-rc.0')), /already exists on 'origin'/)
 })
 
 void test('release Git tagging refuses uncommitted index bytes', async t => {

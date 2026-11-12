@@ -8,12 +8,12 @@ The [Poki for Developers](https://developers.poki.com/) CLI is designed primaril
 
 ## Install
 
-Node.js 20.7 or newer is required. This preview is published on npm's opt-in `experimental` channel; an unqualified `@poki/cli` install follows the stable `latest` channel instead. Choose one persistent [npm installation mode](https://docs.npmjs.com/cli/install/).
+Node.js 20.7 or newer is required. Choose one persistent [npm installation mode](https://docs.npmjs.com/cli/install/).
 
 Install globally when the CLI should be available to the current user in every project:
 
 ```sh
-npm install --global --ignore-scripts @poki/cli@experimental
+npm install --global --ignore-scripts @poki/cli
 poki --version
 ```
 
@@ -22,18 +22,18 @@ Invoke this installation as `poki`.
 Install as a project-local development dependency when the project should pin and share its CLI version:
 
 ```sh
-npm install --save-dev --ignore-scripts @poki/cli@experimental
-npx @poki/cli@experimental --version
+npm install --save-dev --ignore-scripts @poki/cli
+npx @poki/cli --version
 ```
 
-Invoke this installation as `npx @poki/cli@experimental`. Installing or updating this mode modifies the project's `package.json` and npm lockfile, so review and commit those changes with the project.
+Invoke this installation as `npx @poki/cli`. Installing or updating this mode modifies the project's `package.json` and npm lockfile, so review and commit those changes with the project.
 
 ## Configure the project
 
 From the game project directory, run:
 
 ```sh
-npx @poki/cli@experimental init --game GAME_ID --build-dir dist
+npx @poki/cli init --game GAME_ID --build-dir dist
 ```
 
 `GAME_ID` is the game ID shown on its Poki for Developers page. `build-dir` is the directory containing the built game. This creates `poki.json`:
@@ -67,7 +67,7 @@ The developer must authenticate explicitly once, manually, in their own terminal
 Without a project-local dependency, the developer can run:
 
 ```sh
-npx @poki/cli@experimental auth login
+npx @poki/cli auth login
 ```
 
 If `@poki/cli` is already installed as a project dependency, the developer can run its `poki` binary from that project:
@@ -95,7 +95,7 @@ No other command, option, normalized response shape, or workflow has a future cr
 After setup, the LLM should start by running:
 
 ```sh
-npx @poki/cli@experimental
+npx @poki/cli
 ```
 
 The resulting structured help explains how to discover and use every supported command. This README intentionally does not duplicate that LLM-facing documentation.

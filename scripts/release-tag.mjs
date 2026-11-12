@@ -59,7 +59,7 @@ export function validatePublishTag (version, publishArguments) {
     throw new Error(`Invalid npm dist-tag '${tag}'; use a lowercase tag beginning with a letter and containing only letters, digits, dot, underscore, or hyphen.`)
   }
   if (tag !== undefined && semver.validRange(tag) !== null) {
-    throw new Error(`Invalid npm dist-tag '${tag}'; npm dist-tags cannot be valid semantic-version ranges. Use a channel name such as 'experimental'.`)
+    throw new Error(`Invalid npm dist-tag '${tag}'; npm dist-tags cannot be valid semantic-version ranges. Use a channel name such as 'rc'.`)
   }
   if (prerelease && tag === undefined) {
     throw new Error('A prerelease package version requires one explicit non-latest --tag.')
