@@ -396,6 +396,11 @@ void test('Media Kit API rejections retain normal permission and unavailable-ass
   const unavailable = await runCli(scoped('download-url', 'a'), { env })
   assert.equal(unavailable.code, 4)
   assert.equal(errorOf(unavailable).code, 'CONFLICT')
+  const approval = apiResponseError(409, { errors: [{ status: '409', code: 'conflict', title: 'game must be approved' }] }, new Headers(), { method: 'POST', path: '/games/g/marketing_assets/image_screenshot' })
+  assert.equal(approval.code, 'CONFLICT')
+  assert.equal(approval.exitCode, 4)
+  assert.equal(approval.retryable, false)
+  assert.match(approval.hint ?? '', /once your game is approved/)
 })
 
 for (const interrupt of ['signal', 'handler'] as const) {
