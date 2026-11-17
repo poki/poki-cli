@@ -93,6 +93,15 @@ export function apiResponseError (status: number, body: unknown, headers: Header
       hint: 'This request was rejected without starting a test. Run `poki limits get` for current capacity. Reduce the recording batch if it can fit, wait for quota to reset or be released, or contact your account manager if the limit is zero. Do not automatically retry or cancel work to regain quota.'
     })
   }
+  if (status === 409 && request.method === 'POST' && /^\/games\/[^/]+\/marketing_assets\/[^/]+$/.test(request.path) && firstErrorTitle === 'game must be approved') {
+    return new CliError(code, message, 4, {
+      status,
+      details: safeDetails,
+      retryable: false,
+      requestId: headers.get('x-request-id') ?? undefined,
+      hint: 'Media Kit uploads become available once your game is approved. Inspect approved with `poki games get GAME_ID` and wait for approval before uploading again.'
+    })
+  }
   const method = request.method ?? 'GET'
   const retrySafe = method === 'GET' || request.retrySafe === true
   const transient = status === 408 || status === 429 || status >= 500

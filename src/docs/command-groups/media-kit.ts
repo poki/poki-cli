@@ -23,10 +23,11 @@ export function addMediaKitCommandSpecs ({ add, apiAction, argument, downloadReq
   })
   apiAction(['media-kit', 'upload'], 'Upload one or more files of one current asset type.', { method: 'MULTIPLE', path: [`POST ${collection}/:type`, `GET ${collection} (--wait only)`], contacts_api: true }, [edit, read], {
     options: [gameOption, option('--type', 'enum', 'Current asset type; run poki media-kit types for requirements.', { values: [...mediaKitUploadTypes], required: true }), option('--file', 'path', 'Readable nonempty file; repeat once per file, up to 50.', { repeatable: true, required: true }), ...uploadMutationOptions, ...waitOptions('Poll once per interval for all newly accepted IDs to become ready.')],
-    permission_logic: 'Uploading requires can_edit_owned_marketing_assets; polling additionally requires can_read_owned_marketing_assets.',
+    permission_logic: 'Uploading requires an approved game and can_edit_owned_marketing_assets; polling additionally requires can_read_owned_marketing_assets.',
     missing_input: '--type and --file',
     side_effects: ['Creates assets and starts asynchronous storage uploads. Accepted files remain created when other files fail.'],
     behavior: [
+      'Uploads require games.approved=true, including for admins. The server rejects unapproved games with 409 Conflict before processing files. Existing assets can still be read, downloaded, and deleted. Dry-run does not check game approval.',
       'Uses repeated multipart file fields and streams file-backed blobs. Dry-run validates local files and describes the request without contacting the API.',
       'Normalized success always returns a collection, including single-file uploads; raw output preserves the original singular or collection response.',
       'Partial acceptance raises MEDIA_KIT_UPLOAD_PARTIAL_FAILURE (exit 4), with details.accepted, accepted_ids, failed [{filename, error}], and recovery commands. It returns immediately even when polling was requested. Do not replay the batch.',
