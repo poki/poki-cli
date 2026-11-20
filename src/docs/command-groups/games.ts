@@ -1,4 +1,5 @@
 import { listCapabilities } from '../../list-capabilities'
+import { gameEngineInput } from '../resources'
 import type { CommandSpecBuilder } from './types'
 
 export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDiscovery, dataOption, example, formatOption, gameOption, group, listOptionsFor, mutationOptions, option, outputOptions, requestOptions }: CommandSpecBuilder): void {
@@ -6,7 +7,7 @@ export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDis
   const gameFieldOptions = [
     option('--archived', 'boolean', 'Archive the game; --no-archived restores it. Archiving is blocked during a requested or running Web Fit test.'),
     option('--favorite', 'boolean', 'Favorite for the current user only; --no-favorite removes it.'),
-    option('--engine', 'string', 'Developer-editable engine annotation: 2-32 lowercase letters, digits, or hyphens; the server preserves every other annotation.'),
+    option('--engine', 'string', gameEngineInput),
     option('--privacy-policy-url', 'string', 'Public privacy-policy URL with a supported network scheme and no whitespace.'),
     option('--suggested-description', 'string', 'Developer-suggested public game description, at most 65535 UTF-8 bytes.'),
     option('--suggested-category', 'string', `Suggested Poki content-category name; combined comma-separated value at most 65535 UTF-8 bytes; repeatable. ${categoryNameDiscovery}`, { repeatable: true })
@@ -14,6 +15,12 @@ export function addGameCommandSpecs ({ add, apiAction, argument, categoryNameDis
   const gameDataShapeBehavior = '--data is a flat attribute object, not a JSON:API envelope, and replaces all field flags. Run poki games fields for the editable field reference.'
   apiAction(['games', 'list'], 'List games for one team with bounded pagination.', { method: 'GET', path: '/games', contacts_api: true }, ['can_read_owned_games'], { options: [option('--team', 'string', 'Select an exact team ID; without it the API uses the authenticated user\'s first team.'), ...listOptionsFor(listCapabilities.games)], scope: '--team or the authenticated user\'s first team', behavior: ['This endpoint supports --team, sorting, and pagination. It does not support the generic --filter option or combine all of a user\'s teams.'], examples: [example('poki games list --team TEAM_ID --page 2 --page-size 50', 'Read one bounded page; meta.has_next reports whether more pages exist.'), example('poki games list --all --fields id,title,public_version --format csv', 'Select three developer-visible fields and export the complete list as CSV; a single page is refused unless it proves it is the last one.')] })
   apiAction(['games', 'get'], 'Get one game; positional ID defaults to project game_id.', { method: 'GET', path: '/games/:gameID', contacts_api: true }, ['can_read_owned_games'], { arguments: [argument('game-id', 'Game ID; defaults to project game_id.', false)], options: [option('--game', 'string', 'Game ID; alternative to the positional game-id.'), ...outputOptions] })
+  apiAction(['games', 'engines'], 'List existing game engine names for games update.', { method: 'GET', path: '/_annotations/engine', contacts_api: true }, ['can_read_distinct_engine_annotations'], {
+    options: requestOptions,
+    scope: 'All non-deleted games across teams.',
+    output: { shape: '{data: string[], meta: {total}}' },
+    examples: [example('poki games engines --format json', 'Look up the exact name to pass to poki games update --engine.')]
+  })
   add({
     path: ['games', 'readiness'],
     summary: 'Report visible CLI and backend readiness for activation, Playtest requests, and Player Fit tests.',
