@@ -1,9 +1,10 @@
 import type { Argv } from 'yargs'
 
 import { ApiClient } from '../api'
-import { gamesDocumentation } from '../docs/resources'
+import { gameEngineInput, gamesDocumentation } from '../docs/resources'
 import { CliError, inputError } from '../errors'
 import { requireChanges } from '../input'
+import { isRecord } from '../json'
 import { jsonApiDocument, unreadableFields, unreadableFieldsReport } from '../jsonapi'
 import { listCapabilities } from '../list-capabilities'
 import { getProjectGameId, projectConfigError } from '../project'
@@ -130,7 +131,7 @@ function withGameFieldOptions (yargs: Argv): Argv {
     .option('archived', { describe: 'Archive the game; use --no-archived to restore it', type: 'boolean' })
     .option('favorite', { describe: 'Favorite the game for the current user; use --no-favorite to remove it', type: 'boolean' })
     .option('engine', {
-      describe: 'Developer-editable engine annotation: 2-32 lowercase letters, digits, or hyphens; the server preserves every other annotation',
+      describe: gameEngineInput,
       type: 'string'
     })
     .option('privacy-policy-url', {
@@ -177,6 +178,13 @@ export function registerGameCommands (yargs: Argv, api: ApiClient): Argv {
       }), async argv => {
       const result = await listResources(api, '/games', argv, listCapabilities.games, [], argv.team === undefined ? [] : [['team_id', argv.team]])
       renderList(result, argv, 'games')
+    })
+    .command('engines', 'List existing game engine names', engines => withRequestOptions(engines), async argv => {
+      const { body } = await api.request({ path: '/_annotations/engine', accept: 'application/json', timeoutMs: requestTimeout(argv) })
+      if (!isRecord(body) || !Array.isArray(body.engine) || !body.engine.every(name => typeof name === 'string')) {
+        throw new CliError('INVALID_API_RESPONSE', 'Expected a list of engine names from the Poki API.', 5)
+      }
+      render({ data: body.engine, meta: { total: body.engine.length } }, argv)
     })
     .command('get [game-id]', 'Get one game; defaults to the configured project game', get => gameFlag(withOutputOptions(get))
       .positional('game-id', { describe: 'Poki for Developers game ID; defaults to project game_id', type: 'string' }), async argv => {
@@ -236,5 +244,5 @@ export function registerGameCommands (yargs: Argv, api: ApiClient): Argv {
       const body = jsonApiDocument('games', data, gameID)
       await renderMutation(api, argv, { method: 'PATCH', path, body, expected: { type: 'games', id: gameID }, behavior: { sideEffects: ['May create audit or notification activity.'] } })
     })
-    .demandCommand(1, 'Choose games list, games get, games readiness, or games update.'), () => {})
+    .demandCommand(1, 'Choose games list, games engines, games get, games readiness, or games update.'), () => {})
 }

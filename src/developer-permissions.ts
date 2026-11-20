@@ -23,6 +23,7 @@ export const developerPermissionCatalog = [
   { code: 'can_edit_owned_reviews', description: 'Update or close reviews for a game belonging to the current user or team.' },
   { code: 'can_edit_owned_versions', description: 'Update, archive, or restore versions belonging to the current user or team.' },
   { code: 'can_query_clickhouse', description: 'Run analytics queries; backend table and row scoping still applies.' },
+  { code: 'can_read_distinct_engine_annotations', description: 'List the existing game engine names.' },
   { code: 'can_read_owned_game_change_requests', description: 'List or read game-change requests for a game belonging to the current user or team.' },
   { code: 'can_read_owned_game_events', description: 'List event definitions and funnels for a game belonging to the current user or team.' },
   { code: 'can_read_owned_games', description: 'List or read games belonging to the current user or team.' },

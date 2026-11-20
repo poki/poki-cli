@@ -106,12 +106,15 @@ export function apiResponseError (status: number, body: unknown, headers: Header
   const retrySafe = method === 'GET' || request.retrySafe === true
   const transient = status === 408 || status === 429 || status >= 500
   const redirect = status >= 300 && status < 400
+  const unknownGameEngine = method === 'PATCH' && /^\/games\/[^/]+$/.test(request.path) &&
+    status === 403 && firstErrorCode === 'forbidden' && firstErrorTitle === 'only admins can add new game engines; select an existing engine'
   return new CliError(code, message, status === 401 && !payloadValidationFailed ? 3 : status >= 500 ? 5 : 4, {
     status,
     ...(Object.keys(safeDetails).length === 0 ? {} : { details: safeDetails }),
     retryable: transient && retrySafe,
     requestId: headers.get('x-request-id') ?? headers.get('x-cloud-trace-context') ?? undefined,
     retryAfter: headers.get('retry-after') ?? undefined,
+    ...(unknownGameEngine ? { hint: 'Run `poki games engines` and use an exact name from the list in your update.' } : {}),
     ...(status === 403 && firstErrorCode === 'content-moderation-required'
       ? { hint: 'This operation requires content moderation to pass for an unapproved game. Inspect content_moderation_status with `poki games get GAME_ID`. Pending, fail, defer, and missing status block restricted operations. Wait for moderation or address the review feedback before retrying; ordinary version uploads remain available.' }
       : status === 400 && firstErrorCode === 'invalid-lobby-filter' && /^\/games\/[^/]+\/netlib\/lobbies$/.test(request.path)

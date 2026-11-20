@@ -6,6 +6,44 @@ import test from 'node:test'
 
 import { apiHarness, authEnvironment, jsonApi, listen, requestBody, runCli, temporaryDirectory } from './helpers'
 
+void test('games engines reads the live list and rejects malformed names', async t => {
+  let body: unknown
+  const { env } = await apiHarness(t, (req, res) => {
+    assert.equal(req.method, 'GET')
+    assert.equal(req.url, '/_annotations/engine')
+    assert.equal(req.headers.authorization, 'Bearer test-token')
+    assert.equal(req.headers.accept, 'application/json')
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify(body))
+  }, 'game-engines')
+  for (const engines of [['phaser-3', 'studio-engine'], []]) {
+    body = { engine: engines, internal: 'hidden' }
+    const result = await runCli(['games', 'engines', '--format', 'json'], { env })
+    assert.equal(result.code, 0, result.stderr)
+    assert.deepEqual(JSON.parse(result.stdout), { data: engines, meta: { total: engines.length } })
+  }
+  for (body of [{ engines: [] }, { engine: ['unity', null] }]) {
+    const result = await runCli(['games', 'engines', '--format', 'json'], { env })
+    assert.equal(result.code, 5, result.stderr)
+    assert.equal(JSON.parse(result.stderr).error.code, 'INVALID_API_RESPONSE')
+  }
+})
+
+void test('games update points rejected engine names to the live list', async t => {
+  const title = 'only admins can add new game engines; select an existing engine'
+  const { env } = await apiHarness(t, (req, res) => {
+    assert.equal(req.method, 'PATCH')
+    assert.equal(req.url, '/games/g')
+    jsonApi(res, { errors: [{ status: '403', code: 'forbidden', title }] }, 403)
+  }, 'game-engine-update')
+  const result = await runCli(['games', 'update', 'g', '--engine', 'new-engine', '--format', 'json'], { env })
+  assert.equal(result.code, 4, result.stderr)
+  const { error } = JSON.parse(result.stderr)
+  assert.equal(error.message, title)
+  assert.equal(error.retryable, false)
+  assert.match(error.hint, /poki games engines/)
+})
+
 void test('resource lists default to operational summaries and support full and selected views', async t => {
   const { env } = await apiHarness(t, (req, res) => {
     jsonApi(res, {
