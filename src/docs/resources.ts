@@ -1,6 +1,8 @@
 import { mediaKitAssetTypes } from '../media-kit'
 import { RESOURCE_API_TIME_ZONE } from '../timezones'
 
+export const gameEngineInput = 'For a non-empty engine, select an exact name from poki games engines (2-32 lowercase letters, digits, or hyphens).'
+
 export type RelationshipResourceApiType =
   'games' |
   'game_versions' |
@@ -48,7 +50,7 @@ const supplementalDetails: Record<string, {
   'media-kit.status': { enum_values: ['uploading', 'ready', 'error'] },
   'media-kit.size': { unit: 'bytes' },
   'games.public_version': { input_behavior: 'Not editable through games update; versions activate changes the public version. tracks remain the authoritative traffic allocation.' },
-  'games.annotations': { input_behavior: 'Developer mutations accept only engine. The server preserves existing annotation keys and never removes them.' },
+  'games.annotations': { input_behavior: `Developer mutations accept only engine. ${gameEngineInput} The server preserves other annotation keys.` },
   'games.tracks': { input_behavior: 'Not editable through games update. versions activate replaces the allocation with one public track, and the backend rejects activation while multiple tracks already exist. Weights within each track must total 100.' },
   'games.cached_median_download_size': { unit: 'bytes' },
   'games.content_moderation_status': { enum_values: ['pending', 'pass', 'fail', 'defer'] },
@@ -132,7 +134,7 @@ export const gamesDocumentation: ResourceDocumentation = {
     field('privacy_policy_url', 'string', 'editable', 'Public URL of the game privacy policy, at most 255 UTF-8 bytes; use an absolute network URL without whitespace, or an empty string to clear it. Supported schemes: http, https, ftp, tcp, udp, ws, wss.'),
     field('custom_content_security_policy', 'string', 'read-only', 'Server-managed Content Security Policy for the game build.'),
     field('thumbnail_url', 'string', 'read-only', 'Public URL of the current processed thumbnail.'),
-    field('annotations', 'object', 'editable', 'Game metadata map. Developer mutations accept only engine, containing 2 through 32 lowercase letters, digits, or hyphens; the server preserves all existing keys and never removes annotations.'),
+    field('annotations', 'object', 'editable', `Game metadata map. Only engine is editable. ${gameEngineInput} The server preserves other annotation keys.`),
     field('suggested_description', 'string', 'editable', 'Developer-proposed public description, at most 65535 UTF-8 bytes.'),
     field('suggested_categories', 'string', 'editable', 'Comma-separated Poki content-category names proposed by the developer, at most 65535 UTF-8 bytes total; use the title values from poki categories list. Playtest and Player Fit targeting use numeric IDs instead.'),
     field('tracks', 'array<object>', 'read-only', 'Traffic allocation entries containing track, version_id, and weight. versions activate supports games with at most one existing track and replaces the allocation with one public track.'),
