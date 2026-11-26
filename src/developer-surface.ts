@@ -196,7 +196,7 @@ const structuredRulesByPath: Readonly<Record<string, ValueRule>> = {
       app_excluded: booleanRule,
       desktop_only: booleanRule,
       orientation: stringRule,
-      category_id: integerRule,
+      genre_id: integerRule,
       categories: { kind: 'array', item: integerRule }
     }
   },
