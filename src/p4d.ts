@@ -2,9 +2,11 @@ import { auth, refresh } from './auth'
 import { Config } from './config'
 import { serviceEnvironment } from './service-environment'
 import { DEFAULT_UPLOAD_TIMEOUT_MS, timeoutMillisecondsOrDefault } from './timeouts'
+import { ProgressOutput, uploadProgress } from './upload-progress'
 import { CLI_USER_AGENT } from './version'
 
 import { readFileSync, statSync } from 'fs'
+import type { ClientRequest } from 'http'
 import { request } from 'https'
 import { basename } from 'path'
 
@@ -47,6 +49,31 @@ export function legacyUploadTimeoutMs (): number {
 // loopback server; production always uses the https request above.
 export type LegacyTransport = typeof request
 
+// Writing the body in slices lets each write callback report how much of it
+// the socket has taken, which is what the progress line shows. Only one slice
+// is in flight at a time, so Node never buffers more than a slice of it.
+const UPLOAD_SLICE_BYTES = 64 * 1024
+
+function writeBody (req: ClientRequest, body: Buffer, onWritten: (sent: number) => void): void {
+  let offset = 0
+  const writeNext = (): void => {
+    // A destroyed request has already settled through its 'error' event.
+    if (req.destroyed) return
+    if (offset >= body.length) {
+      req.end()
+      return
+    }
+    const end = Math.min(offset + UPLOAD_SLICE_BYTES, body.length)
+    req.write(body.subarray(offset, end), error => {
+      if (error != null) return
+      offset = end
+      onWritten(offset)
+      writeNext()
+    })
+  }
+  writeNext()
+}
+
 async function doit (
   gameId: string,
   filename: string,
@@ -55,7 +82,8 @@ async function doit (
   makePublic: boolean,
   disableImageCompression: boolean,
   config: Config,
-  transport: LegacyTransport
+  transport: LegacyTransport,
+  progressOutput: ProgressOutput
 ): Promise<Response> {
   return await new Promise<Response>((resolve, reject) => {
     if (config.access_token === undefined) {
@@ -96,6 +124,9 @@ async function doit (
     const settle = (action: () => void): void => {
       if (settled) return
       settled = true
+      // End the progress line so what the caller prints next starts on its
+      // own row, even when the answer arrives before the body is sent.
+      progress.finish()
       action()
     }
     const req = transport({
@@ -139,8 +170,13 @@ async function doit (
         : new LegacyUploadError(`Could not reach the Poki upload service: ${error.message}`, 'network')))
     })
 
-    req.write(buffer, 'binary')
-    req.end()
+    // Created only once the request exists: a request that throws while it
+    // is being built must not leave a half-drawn progress line behind.
+    const progress = uploadProgress(buffer.length, progressOutput)
+    writeBody(req, buffer, sent => {
+      progress.update(sent)
+      if (sent === buffer.length) progress.finish()
+    })
   })
 }
 
@@ -169,10 +205,11 @@ async function uploadToP4D (
   notes: string | undefined,
   makePublic: boolean,
   disableImageCompression: boolean,
-  transport: LegacyTransport
+  transport: LegacyTransport,
+  progressOutput: ProgressOutput
 ): Promise<P4dData> {
   let config = await auth(false, console.log)
-  let response = await doit(gameId, filename, name, notes, makePublic, disableImageCompression, config, transport)
+  let response = await doit(gameId, filename, name, notes, makePublic, disableImageCompression, config, transport, progressOutput)
 
   if (response.statusCode === 401 && config.access_type !== 'Token') {
     try {
@@ -180,15 +217,15 @@ async function uploadToP4D (
     } catch (e) {
       config = await auth(true, console.log)
     }
-    response = await doit(gameId, filename, name, notes, makePublic, disableImageCompression, config, transport)
+    response = await doit(gameId, filename, name, notes, makePublic, disableImageCompression, config, transport, progressOutput)
   }
 
   return finalizeP4dResponse(response)
 }
 
 // Keep the original six-argument entry point and its human presentation
-// compatible for the deprecated default upload workflow. The seventh parameter
-// exists for tests only and keeps that call shape intact.
-export async function postToP4D (gameId: string, filename: string, name: string, notes: string | undefined, makePublic: boolean, disableImageCompression: boolean, transport: LegacyTransport = request): Promise<P4dData> {
-  return await uploadToP4D(gameId, filename, name, notes, makePublic, disableImageCompression, transport)
+// compatible for the deprecated default upload workflow. The trailing
+// parameters exist for tests only and keep that call shape intact.
+export async function postToP4D (gameId: string, filename: string, name: string, notes: string | undefined, makePublic: boolean, disableImageCompression: boolean, transport: LegacyTransport = request, progressOutput: ProgressOutput = process.stdout): Promise<P4dData> {
+  return await uploadToP4D(gameId, filename, name, notes, makePublic, disableImageCompression, transport, progressOutput)
 }
