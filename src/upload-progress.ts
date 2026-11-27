@@ -36,12 +36,20 @@ export function uploadProgressLine (sent: number, total: number, elapsedMs: numb
   const fraction = total > 0 ? Math.min(1, Math.max(0, sent / total)) : 1
   const percent = `${Math.floor(fraction * 100)}%`.padStart(4)
   const rate = elapsedMs > 0 && sent > 0 ? `  ${formatBytes(sent / elapsedMs * 1000)}/s` : ''
-  const text = `${percent}  ${formatBytes(sent)} / ${formatBytes(total)}${rate}`
-  // Stay one column short of the terminal width: a line that exactly fills it
-  // wraps in some terminals, and the carriage return then redraws the wrong row.
-  const width = Math.max(MIN_BAR_WIDTH, Math.min(MAX_BAR_WIDTH, columns - text.length - 4))
-  const filled = Math.round(fraction * width)
-  return `[${'#'.repeat(filled)}${'-'.repeat(width - filled)}] ${text}`
+  const bytes = `${formatBytes(sent)} / ${formatBytes(total)}`
+  // Every line stays at least one column short of the terminal width. A line
+  // that wraps puts the carriage return on its last row, so each redraw would
+  // leave the start of the previous one behind. Narrow terminals shed the
+  // rate, then the byte counts, then the bar, keeping the percentage.
+  for (const text of [`${percent}  ${bytes}${rate}`, `${percent}  ${bytes}`, percent]) {
+    const room = columns - text.length - 4
+    if (room < MIN_BAR_WIDTH) continue
+    const width = Math.min(MAX_BAR_WIDTH, room)
+    const filled = Math.round(fraction * width)
+    return `[${'#'.repeat(filled)}${'-'.repeat(width - filled)}] ${text}`
+  }
+  if (percent.length < columns) return percent
+  return percent.trim().slice(0, Math.max(0, columns - 1))
 }
 
 export function uploadProgress (total: number, output: ProgressOutput, now: () => number = Date.now): UploadProgress {

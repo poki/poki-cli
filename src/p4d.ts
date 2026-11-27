@@ -1,5 +1,6 @@
 import { auth, refresh } from './auth'
 import { Config } from './config'
+import { registerInterruptCleanup } from './errors'
 import { serviceEnvironment } from './service-environment'
 import { DEFAULT_UPLOAD_TIMEOUT_MS, timeoutMillisecondsOrDefault } from './timeouts'
 import { ProgressOutput, uploadProgress } from './upload-progress'
@@ -126,6 +127,7 @@ async function doit (
       settled = true
       // End the progress line so what the caller prints next starts on its
       // own row, even when the answer arrives before the body is sent.
+      unregisterProgressInterrupt()
       progress.finish()
       action()
     }
@@ -173,6 +175,9 @@ async function doit (
     // Created only once the request exists: a request that throws while it
     // is being built must not leave a half-drawn progress line behind.
     const progress = uploadProgress(buffer.length, progressOutput)
+    // An interrupt exits without settling, and its error document would
+    // otherwise continue the unfinished progress line in the terminal.
+    const unregisterProgressInterrupt = registerInterruptCleanup(progress.finish)
     writeBody(req, buffer, sent => {
       progress.update(sent)
       if (sent === buffer.length) progress.finish()
