@@ -138,7 +138,7 @@ export const gamesDocumentation: ResourceDocumentation = {
     field('suggested_description', 'string', 'editable', 'Developer-proposed public description, at most 65535 UTF-8 bytes.'),
     field('suggested_categories', 'string', 'editable', 'Comma-separated Poki content-category names proposed by the developer, at most 65535 UTF-8 bytes total; use the title values from poki categories list. Playtest and Player Fit targeting use numeric IDs instead.'),
     field('tracks', 'array<object>', 'read-only', 'Traffic allocation entries containing track, version_id, and weight. versions activate supports games with at most one existing track and replaces the allocation with one public track.'),
-    field('content_metadata', 'object|null', 'read-only', 'Current content and distribution metadata, including scheduled_release_status, scheduled_release_at, scheduled_release_confirmed (false means a draft), and play_store_url, apple_store_url, and steam_url when supplied by the endpoint.'),
+    field('content_metadata', 'object|null', 'read-only', 'Current content and distribution metadata, including the main genre_id, scheduled_release_status, scheduled_release_at, scheduled_release_confirmed (false means a draft), and play_store_url, apple_store_url, and steam_url when supplied by the endpoint.'),
     field('has_upload_token', 'boolean', 'read-only', 'Whether an upload token exists; the token value is never returned.'),
     field('has_auds_token', 'boolean', 'read-only', 'Internal Poki platform integration indicator; read-only and not actionable through the CLI. The token value is never returned.'),
     field('cached_has_revshare', 'boolean', 'computed read-only', 'Cached indication that the game currently has revenue sharing.'),

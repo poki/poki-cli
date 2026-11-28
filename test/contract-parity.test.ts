@@ -27,6 +27,7 @@ void test('game settings persist archive and personal favorite state, including 
 
 void test('game reads preserve store URLs, planned releases, and Dialog integration', async t => {
   const metadata = {
+    genre_id: 9,
     release_status: 'live-test',
     scheduled_release_status: 'full-release',
     scheduled_release_at: '2026-11-01T10:00:00Z',
